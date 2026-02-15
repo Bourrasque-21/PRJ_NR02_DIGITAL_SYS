@@ -46,7 +46,7 @@ module fnd_contr (
         .digit_100     (bcd_2),
         .digit_1000    (bcd_3),
         .digit_dot_1   (4'hf),
-        .digit_dot_10  ((sel_display == 1'b0) ? 4'hE : 4'hf),
+        .digit_dot_10  ((in_dht) ? 4'hE : (sel_display == 1'b0) ? 4'hE : 4'hf),
         .digit_dot_100 (4'hf),
         .digit_dot_1000(4'hf),
         .mux_out       (sr_dth_o)

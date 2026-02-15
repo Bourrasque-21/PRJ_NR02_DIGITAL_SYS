@@ -59,7 +59,7 @@ module top_stopwatch_watch (
     wire [3:0] w_dist_c2 = (w_distance / 100) % 10;
     wire [3:0] w_dist_c3 = w_distance / 1000;
 
-    wire [25:0] w_dist_num = {10'd10, w_dist_c3, w_dist_c2, w_dist_c1, w_dist_c0};
+    wire [25:0] w_dist_num = {10'd0, w_dist_c3, w_dist_c2, w_dist_c1, w_dist_c0};
     wire [25:0] w_sr04_label = {10'd0, 4'd10, 4'd11, 4'd0, 4'd4};
     wire [25:0] fnd_data_dist = (mode_sw_com[2] ? w_sr04_label : w_dist_num);
 

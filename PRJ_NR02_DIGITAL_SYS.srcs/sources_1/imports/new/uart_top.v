@@ -9,9 +9,9 @@ module uart_top (
     output wire o_btn_r,
     output wire o_btn_n,
     output wire o_btn_c,
-
-    output reg       pc_ctrl_mode,
-    output reg [4:0] pc_mode_sw,
+    output wire o_btn_sr,
+    output reg        pc_ctrl_mode,
+    output reg  [4:0] pc_mode_sw,
 
     input wire [23:0] clock_time24
 );
@@ -67,13 +67,14 @@ module uart_top (
     );
 
     ascii_decoder U_ASCII_DECODER (
-        .clk     (clk),
-        .reset   (reset),
-        .rx_data (rx_data),
-        .rx_done (rx_done),
-        .in_btn_r(o_btn_r),
-        .in_btn_n(o_btn_n),
-        .in_btn_c(o_btn_c)
+        .clk      (clk),
+        .reset    (reset),
+        .rx_data  (rx_data),
+        .rx_done  (rx_done),
+        .in_btn_r (o_btn_r),
+        .in_btn_n (o_btn_n),
+        .in_btn_c (o_btn_c),
+        .in_btn_sr(o_btn_sr)
     );
 
     always @(posedge clk or posedge reset) begin
@@ -82,12 +83,12 @@ module uart_top (
             pc_mode_sw   <= 5'b00000;
         end else if (rx_done) begin
             case (rx_data)
-                8'h4D:   pc_ctrl_mode <= ~pc_ctrl_mode;
-                8'h30:   pc_mode_sw[0] <= ~pc_mode_sw[0];
-                8'h31:   pc_mode_sw[1] <= ~pc_mode_sw[1];
-                8'h32:   pc_mode_sw[2] <= ~pc_mode_sw[2];
-                8'h33:   pc_mode_sw[3] <= ~pc_mode_sw[3];
-                8'h34:   pc_mode_sw[4] <= ~pc_mode_sw[4];
+                8'h4D: pc_ctrl_mode <= ~pc_ctrl_mode;
+                8'h30: pc_mode_sw[0] <= ~pc_mode_sw[0];
+                8'h31: pc_mode_sw[1] <= ~pc_mode_sw[1];
+                8'h32: pc_mode_sw[2] <= ~pc_mode_sw[2];
+                8'h33: pc_mode_sw[3] <= ~pc_mode_sw[3];
+                8'h34: pc_mode_sw[4] <= ~pc_mode_sw[4];
             endcase
         end
     end
@@ -95,9 +96,9 @@ module uart_top (
     wire       cmd_q = rx_done && (rx_data == 8'h51);
 
     wire [4:0] hour = clock_time24[23:19];
-    wire [5:0] min  = clock_time24[18:13];
-    wire [5:0] sec  = clock_time24[12:7];
-    wire [6:0] cc   = clock_time24[6:0];
+    wire [5:0] min = clock_time24[18:13];
+    wire [5:0] sec = clock_time24[12:7];
+    wire [6:0] cc = clock_time24[6:0];
 
     uart_time_sender U_TIME_SENDER (
         .clk     (clk),
@@ -374,24 +375,27 @@ module ascii_decoder (
     input  wire       rx_done,
     output reg        in_btn_r,
     output reg        in_btn_n,
-    output reg        in_btn_c
+    output reg        in_btn_c,
+    output reg        in_btn_sr
 );
     always @(posedge clk or posedge reset) begin
         if (reset) begin
-            in_btn_r <= 1'b0;
-            in_btn_n <= 1'b0;
-            in_btn_c <= 1'b0;
+            in_btn_r  <= 1'b0;
+            in_btn_n  <= 1'b0;
+            in_btn_c  <= 1'b0;
+            in_btn_sr <= 1'b0;
         end else begin
-
-            in_btn_r <= 1'b0;
-            in_btn_n <= 1'b0;
-            in_btn_c <= 1'b0;
+            in_btn_r  <= 1'b0;
+            in_btn_n  <= 1'b0;
+            in_btn_c  <= 1'b0;
+            in_btn_sr <= 1'b0;
 
             if (rx_done) begin
                 case (rx_data)
-                    8'h52:   in_btn_r <= 1'b1;
-                    8'h4E:   in_btn_n <= 1'b1;
-                    8'h43:   in_btn_c <= 1'b1;
+                    8'h52:   in_btn_r  <= 1'b1;
+                    8'h4E:   in_btn_n  <= 1'b1;
+                    8'h43:   in_btn_c  <= 1'b1;
+                    8'h54:   in_btn_sr <= 1'b1;
                     default: ;
                 endcase
             end
@@ -493,3 +497,5 @@ module uart_time_sender (
     end
 
 endmodule
+
+

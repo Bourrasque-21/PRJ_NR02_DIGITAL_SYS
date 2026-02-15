@@ -38,16 +38,17 @@ module top_stopwatch_watch (
     wire time_set_mode;
     wire clk_next, clk_up, clk_down;
 
-    wire       or_btn_r;
-    wire       or_btn_n;
-    wire       or_btn_c;
+    wire or_btn_r;
+    wire or_btn_n;
+    wire or_btn_c;
+    wire or_btn_sr;
 
-    wire       pc_ctrl_mode;
+    wire pc_ctrl_mode;
     wire [4:0] pc_mode_sw;
 
-    wire       i_run_stop;
-    wire       i_clear;
-    wire       cu_btn_5;
+    wire i_run_stop;
+    wire i_clear;
+    wire cu_btn_5;
     wire [4:0] mode_sw_com;
 
     wire [1:0] w_led_sel = {mode_sw_com[4], mode_sw_com[1]};
@@ -59,24 +60,26 @@ module top_stopwatch_watch (
     wire [3:0] w_dist_c2 = (w_distance / 100) % 10;
     wire [3:0] w_dist_c3 = w_distance / 1000;
 
-    wire [25:0] w_dist_num = {10'd0, w_dist_c3, w_dist_c2, w_dist_c1, w_dist_c0};
+    wire [25:0] w_dist_num = {
+        10'd0, w_dist_c3, w_dist_c2, w_dist_c1, w_dist_c0
+    };
     wire [25:0] w_sr04_label = {10'd0, 4'd10, 4'd11, 4'd0, 4'd4};
     wire [25:0] fnd_data_dist = (mode_sw_com[2] ? w_sr04_label : w_dist_num);
 
-    wire       w_sr04_out, w_sw_clk_out0, w_sw_clk_out1, w_sw_clk_out2;
-    wire       w_mode_swclk = (w_sys_mod == 2'b00) || (w_sys_mod == 2'b01);
-    wire       w_mode_sr04  = (w_sys_mod == 2'b10);
-    wire       w_mode_dht11 = (w_sys_mod == 2'b11);
+    wire w_sr04_out, w_sw_clk_out0, w_sw_clk_out1, w_sw_clk_out2;
+    wire w_mode_swclk = (w_sys_mod == 2'b00) || (w_sys_mod == 2'b01);
+    wire w_mode_sr04 = (w_sys_mod == 2'b10);
+    wire w_mode_dht11 = (w_sys_mod == 2'b11);
 
-    assign w_sr04_btn = w_mode_sr04 & w_sr04_out;
+    assign w_sr04_btn = w_mode_sr04 & (or_btn_sr | w_sr04_out);
 
     assign w_sw_clk_out0 = (or_btn_r | i_btn_8) & w_mode_swclk;
     assign w_sw_clk_out1 = (or_btn_c | i_btn_2) & w_mode_swclk;
     assign w_sw_clk_out2 = (or_btn_n | i_btn_5) & w_mode_swclk;
 
     assign i_run_stop = w_sw_clk_out0;
-    assign i_clear    = w_sw_clk_out1;
-    assign cu_btn_5   = w_sw_clk_out2;
+    assign i_clear = w_sw_clk_out1;
+    assign cu_btn_5 = w_sw_clk_out2;
 
     assign mode_sw_com = pc_ctrl_mode ? pc_mode_sw : mode_sw;
     assign pc_mode_led = pc_ctrl_mode;
@@ -108,9 +111,10 @@ module top_stopwatch_watch (
         .uart_rx(uart_rx),
         .uart_tx(uart_tx),
 
-        .o_btn_r(or_btn_r),
-        .o_btn_n(or_btn_n),
-        .o_btn_c(or_btn_c),
+        .o_btn_r  (or_btn_r),
+        .o_btn_n  (or_btn_n),
+        .o_btn_c  (or_btn_c),
+        .o_btn_sr (or_btn_sr),
 
         .pc_ctrl_mode(pc_ctrl_mode),
         .pc_mode_sw  (pc_mode_sw),
@@ -328,8 +332,7 @@ module tick_counter #(
                 end else begin
                     counter_next = counter_reg - 1'b1;
                 end
-            end
-            else begin
+            end else begin
                 if (counter_reg == (TIMES - 1)) begin
                     counter_next = 0;
                     o_tick       = 1'b1;
@@ -567,5 +570,7 @@ module set_counter #(
     end
 
 endmodule
+
+
 
 

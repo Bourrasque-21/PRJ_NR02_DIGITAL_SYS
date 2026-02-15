@@ -4,26 +4,14 @@ module sr04_ctrl_top (
     input        clk,
     input        reset,
     input        echo,
-    input        start,
+    input        sr04_start,
     output       trig,
-    output [7:0] fnd_data,
-    output [3:0] fnd_digit
+    output [12:0] distance
 );
 
-    wire w_start;
     wire w_tick_1us;
     wire w_timeout;
 
-    wire [12:0] d;
-    wire [5:0] w_dist_m = d / 100;
-    wire [6:0] w_dist_c = d % 100;
-
-    btn_debounce U_BTN_SR04 (
-        .clk  (clk),
-        .reset(reset),
-        .i_btn(start),
-        .o_btn(w_start)
-    );
 
     tick_gen_1us U_TICK_1us (
         .clk    (clk),
@@ -35,28 +23,13 @@ module sr04_ctrl_top (
         .clk     (clk),
         .reset   (reset),
         .tick_1  (w_tick_1us),
-        .start   (w_start),
+        .start   (sr04_start),
         .echo    (echo),
         .trig    (trig),
-        .distance(d),
-        .timeout (w_timeout)
+        .distance(distance),
+        .timeout ()
     );
 
-    // =================
-    // FND
-    // =================
-    fnd_contr U_FND_CTRL (
-        .clk          (clk),
-        .reset        (reset),
-        .sel_display  (1'b0),
-        .sel_display_2(1'b0),
-        .decimal_mode (1'b1),
-        .show_error   (w_timeout),
-        .fnd_in_data  ({7'b0, 6'b0, w_dist_m, w_dist_c}),
-        .fnd_in_data_2(25'd0),
-        .fnd_digit    (fnd_digit),
-        .fnd_data     (fnd_data)
-    );
 endmodule
 
 

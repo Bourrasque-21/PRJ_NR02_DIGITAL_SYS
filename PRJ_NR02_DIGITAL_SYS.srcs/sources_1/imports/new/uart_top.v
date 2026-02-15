@@ -10,7 +10,7 @@
 //   - 'N' : Generate a 1-cycle pulse on o_btn_n (mapped to Next select)
 //   - 'C' : Generate a 1-cycle pulse on o_btn_c (mapped to Clear or Down)
 //   - 'M' : Toggle PC control mode (pc_ctrl_mode)
-//   - '0'~'3' : Toggle individual bits of pc_mode_sw[0..3]
+//   - '0'~'4' : Toggle individual bits of pc_mode_sw[0..3]
 //   - 'Q' : Transmit current clock time over UART TX as ASCII
 //           format: "HH:MM:SS:CC\r\n"
 //
@@ -33,7 +33,7 @@ module uart_top (
     output wire o_btn_c,
 
     output reg       pc_ctrl_mode,
-    output reg [3:0] pc_mode_sw,
+    output reg [4:0] pc_mode_sw,
 
     input wire [23:0] clock_time24
 );
@@ -114,7 +114,7 @@ module uart_top (
     always @(posedge clk or posedge reset) begin
         if (reset) begin
             pc_ctrl_mode <= 1'b0;
-            pc_mode_sw   <= 4'b0000;
+            pc_mode_sw   <= 5'b00000;
         end else if (rx_done) begin
             case (rx_data)
                 8'h4D:   pc_ctrl_mode <= ~pc_ctrl_mode;  // 'M'
@@ -122,6 +122,7 @@ module uart_top (
                 8'h31:   pc_mode_sw[1] <= ~pc_mode_sw[1];  // '1'
                 8'h32:   pc_mode_sw[2] <= ~pc_mode_sw[2];  // '2'
                 8'h33:   pc_mode_sw[3] <= ~pc_mode_sw[3];  // '3'
+                8'h34:   pc_mode_sw[4] <= ~pc_mode_sw[4];  // '4'
                 default: ;  // hold state
             endcase
         end
@@ -592,3 +593,4 @@ module uart_time_sender (
     end
 
 endmodule
+

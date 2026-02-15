@@ -27,16 +27,20 @@
 //   - In Stopwatch mode, buttons control run/stop and clear.
 //============================================================
 module top_stopwatch_watch (
-    input  wire       clk,
-    input  wire       reset,
+    input wire clk,
+    input wire reset,
 
-    input  wire [3:0] mode_sw,
-    input  wire       btn_8,
-    input  wire       btn_5,
-    input  wire       btn_2,
+    input wire [4:0] mode_sw,
+    input wire       btn_8,
+    input wire       btn_5,
+    input wire       btn_2,
+    input wire       sr04_start,
 
-    input  wire       uart_rx,
-    output wire       uart_tx,
+    input  wire echo,
+    output wire trig,
+
+    input  wire uart_rx,
+    output wire uart_tx,
 
     output wire [3:0] fnd_digit,
     output wire [7:0] fnd_data,
@@ -49,8 +53,8 @@ module top_stopwatch_watch (
     // Internal time buses
     // ------------------------------------------------------------
     wire [25:0] w_stopwatch_time; // {hour[25:19], min[18:13], sec[12:7], cc[6:0]}
-    wire [23:0] w_clock_time;     // {hour[23:19], min[18:13], sec[12:7], cc[6:0]}
-
+    wire [23:0] w_clock_time;  // {hour[23:19], min[18:13], sec[12:7], cc[6:0]}
+    wire [12:0] w_distance;
     // Stopwatch mode select (direction)
     wire w_mode;
 
@@ -60,7 +64,7 @@ module top_stopwatch_watch (
     wire i_btn_8;
     wire i_btn_5;
     wire i_btn_2;
-
+    wire w_sr04_btn;
     // ------------------------------------------------------------
     // Clock control signals (time-set)
     // ------------------------------------------------------------
@@ -71,44 +75,73 @@ module top_stopwatch_watch (
     // ------------------------------------------------------------
     // UART-generated virtual button pulses (R/N/C)
     // ------------------------------------------------------------
-    wire or_btn_r;
-    wire or_btn_n;
-    wire or_btn_c;
+    wire       or_btn_r;
+    wire       or_btn_n;
+    wire       or_btn_c;
 
     // ------------------------------------------------------------
     // PC control mode (switch override)
     // ------------------------------------------------------------
     wire       pc_ctrl_mode;
-    wire [3:0] pc_mode_sw;
+    wire [4:0] pc_mode_sw;
 
     // ------------------------------------------------------------
     // Combined inputs (UART OR physical)
     // ------------------------------------------------------------
-    wire       i_run_stop;    // Run/Stop in stopwatch or Up in time-set
-    wire       i_clear;       // Clear in stopwatch or Down in time-set
-    wire       cu_btn_5;      // Next select in time-set
-    wire [3:0] mode_sw_com;   // final mode switches after PC override
+    wire       i_run_stop;  // Run/Stop in stopwatch or Up in time-set
+    wire       i_clear;  // Clear in stopwatch or Down in time-set
+    wire       cu_btn_5;  // Next select in time-set
+    wire [4:0] mode_sw_com;  // final mode switches after PC override
 
-    assign i_run_stop  = or_btn_r | i_btn_8;
-    assign i_clear     = or_btn_c | i_btn_2;
-    assign cu_btn_5    = or_btn_n | i_btn_5;
+    wire [1:0] w_led_sel = {mode_sw_com[4], mode_sw_com[1]};
+    wire [3:0] w_clk_sel_led;
+
+    wire [5:0] w_dist_m = w_distance / 100;
+    wire [6:0] w_dist_c = w_distance % 100;
+
+    assign i_run_stop = or_btn_r | i_btn_8;
+    assign i_clear = or_btn_c | i_btn_2;
+    assign cu_btn_5 = or_btn_n | i_btn_5;
 
     // PC mode override mux
     assign mode_sw_com = pc_ctrl_mode ? pc_mode_sw : mode_sw;
     assign pc_mode_led = pc_ctrl_mode;
 
+    // time-set 우선, 아니면 소스 표시
+    assign out_led = (w_led_sel == 2'b11) ? 4'b0011 :  // 11
+                     (w_led_sel == 2'b10) ? 4'b0010 :  // 10
+                     (w_led_sel == 2'b01) ? (time_set_mode ? w_clk_sel_led : 4'b0001)  // 01
+                                          : 4'b0000;  // 00
+
+
+    sr04_ctrl_top U_SR04_CTRL (
+        .clk(clk),
+        .reset(reset),
+        .echo(echo),
+        .sr04_start(w_sr04_btn),
+        .trig(trig),
+        .distance(w_distance)
+    );
+
+    btn_debounce U_SR04_BTN (
+        .clk  (clk),
+        .reset(reset),
+        .i_btn(sr04_start),
+        .o_btn(w_sr04_btn)
+    );
+
     // ------------------------------------------------------------
     // UART top: receives commands + can transmit clock time on 'Q'
     // ------------------------------------------------------------
     uart_top U_UART (
-        .clk         (clk),
-        .reset       (reset),
-        .uart_rx     (uart_rx),
-        .uart_tx     (uart_tx),
+        .clk    (clk),
+        .reset  (reset),
+        .uart_rx(uart_rx),
+        .uart_tx(uart_tx),
 
-        .o_btn_r     (or_btn_r),
-        .o_btn_n     (or_btn_n),
-        .o_btn_c     (or_btn_c),
+        .o_btn_r(or_btn_r),
+        .o_btn_n(or_btn_n),
+        .o_btn_c(or_btn_c),
 
         .pc_ctrl_mode(pc_ctrl_mode),
         .pc_mode_sw  (pc_mode_sw),
@@ -121,8 +154,8 @@ module top_stopwatch_watch (
     // Clock datapath (runs continuously; time-set gates ticking)
     // ------------------------------------------------------------
     clk_datapath U_CLOCK_DATAPATH (
-        .clk        (clk),
-        .reset      (reset),
+        .clk  (clk),
+        .reset(reset),
 
         .sw_time_set(time_set_mode),
         .btn_next   (clk_next),
@@ -130,12 +163,12 @@ module top_stopwatch_watch (
         .down_count (clk_down),
         .clock_mode (clock_mode),
 
-        .c_msec     (w_clock_time[6:0]),
-        .c_sec      (w_clock_time[12:7]),
-        .c_min      (w_clock_time[18:13]),
-        .c_hour     (w_clock_time[23:19]),
+        .c_msec(w_clock_time[6:0]),
+        .c_sec (w_clock_time[12:7]),
+        .c_min (w_clock_time[18:13]),
+        .c_hour(w_clock_time[23:19]),
 
-        .led        (out_led)
+        .led(w_clk_sel_led)
     );
 
     // ------------------------------------------------------------
@@ -165,27 +198,27 @@ module top_stopwatch_watch (
     // ------------------------------------------------------------
     // Control unit: stopwatch FSM + clock/time-set button mapping
     // ------------------------------------------------------------
-    wire o_btn_8; // stopwatch run enable (level)
-    wire o_btn_2; // stopwatch clear pulse
+    wire o_btn_8;  // stopwatch run enable (level)
+    wire o_btn_2;  // stopwatch clear pulse
 
     control_unit U_CONTROL_UNIT (
-        .clk        (clk),
-        .reset      (reset),
-        .mode_sw    (mode_sw_com),
+        .clk    (clk),
+        .reset  (reset),
+        .mode_sw(mode_sw_com[3:0]),
 
-        .i_run_stop (i_run_stop),
-        .i_clear    (i_clear),
-        .cu_btn_5   (cu_btn_5),
+        .i_run_stop(i_run_stop),
+        .i_clear   (i_clear),
+        .cu_btn_5  (cu_btn_5),
 
-        .o_mode_sw  (w_mode),
-        .o_run_stop (o_btn_8),
-        .o_clear    (o_btn_2),
+        .o_mode_sw (w_mode),
+        .o_run_stop(o_btn_8),
+        .o_clear   (o_btn_2),
 
-        .clock_mode    (clock_mode),
-        .time_set_mode (time_set_mode),
-        .clk_next      (clk_next),
-        .clk_up        (clk_up),
-        .clk_down      (clk_down)
+        .clock_mode   (clock_mode),
+        .time_set_mode(time_set_mode),
+        .clk_next     (clk_next),
+        .clk_up       (clk_up),
+        .clk_down     (clk_down)
     );
 
     // ------------------------------------------------------------
@@ -198,10 +231,10 @@ module top_stopwatch_watch (
         .clear   (o_btn_2),
         .run_stop(o_btn_8),
 
-        .msec    (w_stopwatch_time[6:0]),
-        .sec     (w_stopwatch_time[12:7]),
-        .min     (w_stopwatch_time[18:13]),
-        .hour    (w_stopwatch_time[25:19])
+        .msec(w_stopwatch_time[6:0]),
+        .sec (w_stopwatch_time[12:7]),
+        .min (w_stopwatch_time[18:13]),
+        .hour(w_stopwatch_time[25:19])
     );
 
     // ------------------------------------------------------------
@@ -213,9 +246,11 @@ module top_stopwatch_watch (
         .clk          (clk),
         .reset        (reset),
         .sel_display  (mode_sw_com[2]),
-        .sel_display_2(mode_sw_com[1]),
+        .sel_display_2({mode_sw_com[4], mode_sw_com[1]}),
         .fnd_in_data  (w_stopwatch_time),
         .fnd_in_data_2(w_clock_time),
+        .fnd_dist_data({13'd0, w_dist_m, w_dist_c}),
+        .fnd_dht_data (26'd0),
         .fnd_digit    (fnd_digit),
         .fnd_data     (fnd_data)
     );
@@ -229,11 +264,11 @@ endmodule
 // - run_stop gates counting; clear resets all counters
 //============================================================
 module stopwatch_datapath (
-    input  wire       clk,
-    input  wire       reset,
-    input  wire       mode_sw,
-    input  wire       clear,
-    input  wire       run_stop,
+    input wire clk,
+    input wire reset,
+    input wire mode_sw,
+    input wire clear,
+    input wire run_stop,
 
     output wire [6:0] msec,
     output wire [5:0] sec,
@@ -246,14 +281,17 @@ module stopwatch_datapath (
 
     // 100 Hz tick (10 ms period)
     tick_gen_100hz U_tick_gen (
-        .clk        (clk),
-        .reset      (reset),
-        .i_run_stop (run_stop),
+        .clk         (clk),
+        .reset       (reset),
+        .i_run_stop  (run_stop),
         .o_tick_100hz(w_tick_100hz)
     );
 
     // hour: 0..99
-    tick_counter #(.BIT_WIDTH(7), .TIMES(100)) hour_counter (
+    tick_counter #(
+        .BIT_WIDTH(7),
+        .TIMES(100)
+    ) hour_counter (
         .clk     (clk),
         .reset   (reset),
         .i_tick  (w_hour_tick),
@@ -265,7 +303,10 @@ module stopwatch_datapath (
     );
 
     // min: 0..59
-    tick_counter #(.BIT_WIDTH(7), .TIMES(60)) min_counter (
+    tick_counter #(
+        .BIT_WIDTH(7),
+        .TIMES(60)
+    ) min_counter (
         .clk     (clk),
         .reset   (reset),
         .i_tick  (w_min_tick),
@@ -277,7 +318,10 @@ module stopwatch_datapath (
     );
 
     // sec: 0..59
-    tick_counter #(.BIT_WIDTH(7), .TIMES(60)) sec_counter (
+    tick_counter #(
+        .BIT_WIDTH(7),
+        .TIMES(60)
+    ) sec_counter (
         .clk     (clk),
         .reset   (reset),
         .i_tick  (w_sec_tick),
@@ -289,7 +333,10 @@ module stopwatch_datapath (
     );
 
     // cc (centi-second): 0..99
-    tick_counter #(.BIT_WIDTH(7), .TIMES(100)) msec_counter (
+    tick_counter #(
+        .BIT_WIDTH(7),
+        .TIMES(100)
+    ) msec_counter (
         .clk     (clk),
         .reset   (reset),
         .i_tick  (w_tick_100hz),
@@ -312,15 +359,15 @@ module tick_counter #(
     parameter BIT_WIDTH = 7,
     parameter TIMES     = 100
 ) (
-    input  wire                   clk,
-    input  wire                   reset,
-    input  wire                   i_tick,
-    input  wire                   mode,
-    input  wire                   clear,
-    input  wire                   run_stop,
+    input wire clk,
+    input wire reset,
+    input wire i_tick,
+    input wire mode,
+    input wire clear,
+    input wire run_stop,
 
-    output wire [BIT_WIDTH-1:0]   o_count,
-    output reg                    o_tick
+    output wire [BIT_WIDTH-1:0] o_count,
+    output reg                  o_tick
 );
     reg [BIT_WIDTH-1:0] counter_reg, counter_next;
 
@@ -347,8 +394,7 @@ module tick_counter #(
                 end else begin
                     counter_next = counter_reg - 1'b1;
                 end
-            end
-            // mode=0: up count
+            end  // mode=0: up count
             else begin
                 if (counter_reg == (TIMES - 1)) begin
                     counter_next = 0;
@@ -376,13 +422,13 @@ module tick_gen_100hz (
 
     always @(posedge clk or posedge reset) begin
         if (reset) begin
-            r_counter   <= 0;
+            r_counter <= 0;
             o_tick_100hz <= 1'b0;
         end else begin
             if (i_run_stop) begin
                 r_counter <= r_counter + 1'b1;
                 if (r_counter == (F_COUNT - 1)) begin
-                    r_counter   <= 0;
+                    r_counter <= 0;
                     o_tick_100hz <= 1'b1;
                 end else begin
                     o_tick_100hz <= 1'b0;
@@ -402,14 +448,14 @@ endmodule
 // - LED shows current selection (hour/min/sec/cc) when time-set.
 //============================================================
 module clk_datapath (
-    input  wire       clk,
-    input  wire       reset,
+    input wire clk,
+    input wire reset,
 
-    input  wire       sw_time_set,
-    input  wire       btn_next,
-    input  wire       up_count,
-    input  wire       down_count,
-    input  wire       clock_mode,
+    input wire sw_time_set,
+    input wire btn_next,
+    input wire up_count,
+    input wire down_count,
+    input wire clock_mode,
 
     output wire [6:0] c_msec,
     output wire [5:0] c_sec,
@@ -420,9 +466,9 @@ module clk_datapath (
     wire tick_100hz;
 
     tick_gen_100hz U_tick_gen (
-        .clk        (clk),
-        .reset      (reset),
-        .i_run_stop (1'b1),
+        .clk         (clk),
+        .reset       (reset),
+        .i_run_stop  (1'b1),
         .o_tick_100hz(tick_100hz)
     );
 
@@ -442,7 +488,10 @@ module clk_datapath (
     wire sec_tick, min_tick, hour_tick;
 
     wire [6:0] msec;
-    set_counter #(.WIDTH(7), .MAX(100)) U_MSEC (
+    set_counter #(
+        .WIDTH(7),
+        .MAX  (100)
+    ) U_MSEC (
         .clk    (clk),
         .reset  (reset),
         .en_tick(en_tick),
@@ -450,14 +499,17 @@ module clk_datapath (
         .o_tick (sec_tick),
         .count  (msec),
 
-        .set_en (sw_time_set && clock_mode),
-        .sel_me (sel == 2'b00),
-        .up     (up_count),
-        .down   (down_count)
+        .set_en(sw_time_set && clock_mode),
+        .sel_me(sel == 2'b00),
+        .up    (up_count),
+        .down  (down_count)
     );
 
     wire [5:0] sec;
-    set_counter #(.WIDTH(6), .MAX(60)) U_SEC (
+    set_counter #(
+        .WIDTH(6),
+        .MAX  (60)
+    ) U_SEC (
         .clk    (clk),
         .reset  (reset),
         .en_tick(en_tick),
@@ -465,14 +517,17 @@ module clk_datapath (
         .o_tick (min_tick),
         .count  (sec),
 
-        .set_en (sw_time_set && clock_mode),
-        .sel_me (sel == 2'b01),
-        .up     (up_count),
-        .down   (down_count)
+        .set_en(sw_time_set && clock_mode),
+        .sel_me(sel == 2'b01),
+        .up    (up_count),
+        .down  (down_count)
     );
 
     wire [5:0] min;
-    set_counter #(.WIDTH(6), .MAX(60)) U_MIN (
+    set_counter #(
+        .WIDTH(6),
+        .MAX  (60)
+    ) U_MIN (
         .clk    (clk),
         .reset  (reset),
         .en_tick(en_tick),
@@ -480,14 +535,17 @@ module clk_datapath (
         .o_tick (hour_tick),
         .count  (min),
 
-        .set_en (sw_time_set && clock_mode),
-        .sel_me (sel == 2'b10),
-        .up     (up_count),
-        .down   (down_count)
+        .set_en(sw_time_set && clock_mode),
+        .sel_me(sel == 2'b10),
+        .up    (up_count),
+        .down  (down_count)
     );
 
     wire [4:0] hour;
-    set_counter #(.WIDTH(5), .MAX(24)) U_HOUR (
+    set_counter #(
+        .WIDTH(5),
+        .MAX  (24)
+    ) U_HOUR (
         .clk    (clk),
         .reset  (reset),
         .en_tick(en_tick),
@@ -495,10 +553,10 @@ module clk_datapath (
         .o_tick (),
         .count  (hour),
 
-        .set_en (sw_time_set && clock_mode),
-        .sel_me (sel == 2'b11),
-        .up     (up_count),
-        .down   (down_count)
+        .set_en(sw_time_set && clock_mode),
+        .sel_me(sel == 2'b11),
+        .up    (up_count),
+        .down  (down_count)
     );
 
     assign c_msec = msec;
@@ -511,16 +569,13 @@ module clk_datapath (
     // - All on in normal clock mode
     // - One-hot indicates selected field in time-set mode
     always @(*) begin
-        if (reset)          led = 4'b0000;
-        else if (!clock_mode) led = 4'b0000;
-        else if (!sw_time_set) led = 4'b1111;
+        if (reset) led = 4'b0000;
         else begin
             case (sel)
-                2'b00:   led = 4'b0001;
-                2'b01:   led = 4'b0010;
-                2'b10:   led = 4'b0100;
-                2'b11:   led = 4'b1000;
-                default: led = 4'b0001;
+                2'b00: led = 4'b0001;
+                2'b01: led = 4'b0010;
+                2'b10: led = 4'b0100;
+                2'b11: led = 4'b1000;
             endcase
         end
     end
@@ -555,8 +610,8 @@ module set_counter #(
     parameter WIDTH = 7,
     parameter MAX   = 100
 ) (
-    input  wire             clk,
-    input  wire             reset,
+    input wire clk,
+    input wire reset,
 
     // normal count
     input  wire             en_tick,
@@ -565,10 +620,10 @@ module set_counter #(
     output wire [WIDTH-1:0] count,
 
     // time-set
-    input  wire             set_en,
-    input  wire             sel_me,
-    input  wire             up,
-    input  wire             down
+    input wire set_en,
+    input wire sel_me,
+    input wire up,
+    input wire down
 );
 
     reg [WIDTH-1:0] counter_reg, counter_next;
@@ -590,21 +645,23 @@ module set_counter #(
         if (set_en && sel_me) begin
             if (up && !down) begin
                 if (counter_reg == (MAX - 1)) counter_next = 0;
-                else                          counter_next = counter_reg + 1'b1;
+                else counter_next = counter_reg + 1'b1;
             end else if (down && !up) begin
-                if (counter_reg == 0)         counter_next = (MAX - 1);
-                else                          counter_next = counter_reg - 1'b1;
+                if (counter_reg == 0) counter_next = (MAX - 1);
+                else counter_next = counter_reg - 1'b1;
             end
         end else if (en_tick && i_tick) begin
-            if (counter_reg == (MAX - 1))     counter_next = 0;
-            else                              counter_next = counter_reg + 1'b1;
+            if (counter_reg == (MAX - 1)) counter_next = 0;
+            else counter_next = counter_reg + 1'b1;
         end
     end
 
     // register
     always @(posedge clk or posedge reset) begin
         if (reset) counter_reg <= 0;
-        else       counter_reg <= counter_next;
+        else counter_reg <= counter_next;
     end
 
 endmodule
+
+

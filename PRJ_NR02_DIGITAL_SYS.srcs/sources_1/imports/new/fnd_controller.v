@@ -30,10 +30,13 @@ module fnd_contr (
     input  wire        reset,
 
     input  wire        sel_display,    // page select: 0=sec/cc, 1=hour/min
-    input  wire        sel_display_2,  // source select: 0=stopwatch, 1=clock
+    input  wire  [1:0] sel_display_2,  // source select: 0=stopwatch, 1=clock
 
     input  wire [25:0] fnd_in_data,     // stopwatch time (packed)
     input  wire [23:0] fnd_in_data_2,   // clock time (packed)
+
+    input wire  [25:0] fnd_dist_data,
+    input wire  [25:0] fnd_dht_data,
 
     output wire [3:0]  fnd_digit,       // digit enable (active-low assumed)
     output wire [7:0]  fnd_data         // segment pattern
@@ -47,10 +50,12 @@ module fnd_contr (
     //   [25:19] hour, [18:13] min, [12:7] sec, [6:0] cc
     wire [25:0] time_sel;
 
-    mux_2x1_set U_SRC_SEL (
+    mux_4x1_set U_MODE_SEL (
         .sel   (sel_display_2),
-        .i_sel0({2'b00, fnd_in_data}), // stopwatch: already 26-bit (extra 2 bits kept as 0)
-        .i_sel1(fnd_in_data_2),        // clock: 24-bit, treated as 26-bit bus here
+        .i_sel0(fnd_in_data), // stopwatch: already 26-bit (extra 2 bits kept as 0)
+        .i_sel1({2'b00, fnd_in_data_2}),        // clock: 24-bit, treated as 26-bit bus here
+        .i_sel2(fnd_dist_data),
+        .i_sel3(fnd_dht_data),
         .o_mux (time_sel)
     );
 
@@ -336,11 +341,17 @@ endmodule
 //============================================================
 // 2-to-1 mux for selecting packed time data (26-bit wide).
 //============================================================
-module mux_2x1_set (
-    input  wire        sel,
+module mux_4x1_set (
+    input  wire  [1:0] sel,
     input  wire [25:0] i_sel0,
     input  wire [25:0] i_sel1,
+    input  wire [25:0] i_sel2,
+    input  wire [25:0] i_sel3,
     output wire [25:0] o_mux
 );
-    assign o_mux = sel ? i_sel1 : i_sel0;
+    assign o_mux = (sel == 2'b00) ? i_sel0 :
+                   (sel == 2'b01) ? i_sel1 :
+                   (sel == 2'b10) ? i_sel2 :
+                                    i_sel3;
+
 endmodule

@@ -97,29 +97,41 @@ module top_stopwatch_watch (
     wire [1:0] w_sys_mod = {mode_sw_com[4], mode_sw_com[1]};
     wire [3:0] w_clk_sel_led;
 
-    wire [5:0] w_dist_m = w_distance / 100;
-    wire [6:0] w_dist_c = w_distance % 100;
+    //wire [4:0] w_dist_m  = w_distance % 10; 
+    wire [3:0] w_dist_c0 = (w_distance) % 10; 
+    wire [3:0] w_dist_c1 = (w_distance / 10) % 10;
+    wire [3:0] w_dist_c2 = (w_distance / 100) % 10; 
+    wire [3:0] w_dist_c3 = w_distance / 1000;
 
-    wire w_sr04_out;
-    wire w_mode_sr04 = (w_sys_mod == 2'b10);
-    //wire w_mode_dht11 = (w_sys_mod == 2'b11);
+    wire [25:0] w_dist_num = {10'd10, w_dist_c3, w_dist_c2, w_dist_c1, w_dist_c0};
+    wire [25:0] w_sr04_label = {10'd0, 4'd10, 4'd11, 4'd0, 4'd4};
+    wire [25:0] fnd_data_dist = (mode_sw_com[2] ? w_sr04_label : w_dist_num);
+
+    wire       w_sr04_out, w_sw_clk_out0, w_sw_clk_out1, w_sw_clk_out2;
+    wire       w_mode_swclk = (w_sys_mod == 2'b00) || (w_sys_mod == 2'b01);
+    wire       w_mode_sr04  = (w_sys_mod == 2'b10);
+    wire       w_mode_dht11 = (w_sys_mod == 2'b11);
 
     assign w_sr04_btn = w_mode_sr04 & w_sr04_out;
     //assign w_mode_dht11 = w_mode_dht11 &
 
-    assign i_run_stop = or_btn_r | i_btn_8;
-    assign i_clear = or_btn_c | i_btn_2;
-    assign cu_btn_5 = or_btn_n | i_btn_5;
-    
+    assign w_sw_clk_out0 = (or_btn_r | i_btn_8) & w_mode_swclk;
+    assign w_sw_clk_out1 = (or_btn_c | i_btn_2) & w_mode_swclk;
+    assign w_sw_clk_out2 = (or_btn_n | i_btn_5) & w_mode_swclk;
+
+    assign i_run_stop = w_sw_clk_out0;
+    assign i_clear    = w_sw_clk_out1;
+    assign cu_btn_5   = w_sw_clk_out2;
+
     // PC mode override mux
     assign mode_sw_com = pc_ctrl_mode ? pc_mode_sw : mode_sw;
     assign pc_mode_led = pc_ctrl_mode;
 
     // time-set 우선, 아니면 소스 표시
     assign out_led = (w_led_sel == 2'b11) ? 4'b0011 :  // 11
-                     (w_led_sel == 2'b10) ? 4'b0010 :  // 10
-                     (w_led_sel == 2'b01) ? (time_set_mode ? w_clk_sel_led : 4'b0001)  // 01
-                                          : 4'b0000;  // 00
+        (w_led_sel == 2'b10) ? 4'b0010 :  // 10
+        (w_led_sel == 2'b01) ? (time_set_mode ? w_clk_sel_led : 4'b0001)  // 01
+        : 4'b0000;  // 00
 
 
     sr04_ctrl_top U_SR04_CTRL (
@@ -257,7 +269,7 @@ module top_stopwatch_watch (
         .sel_display_2({mode_sw_com[4], mode_sw_com[1]}),
         .fnd_in_data  (w_stopwatch_time),
         .fnd_in_data_2(w_clock_time),
-        .fnd_dist_data({13'd0, w_dist_m, w_dist_c}),
+        .fnd_dist_data(fnd_data_dist),
         .fnd_dht_data (26'd0),
         .fnd_digit    (fnd_digit),
         .fnd_data     (fnd_data)

@@ -59,6 +59,32 @@ module fnd_contr (
         .o_mux (time_sel)
     );
 
+    // -----------------------------------------------------------
+    // FND SR04, DHT11
+    // -----------------------------------------------------------
+
+    wire in_dist = (sel_display_2 == 2'b10);
+    wire in_dht  = (sel_display_2 == 2'b11);
+
+    wire [3:0] bcd_3 = time_sel[15:12];
+    wire [3:0] bcd_2 = time_sel[11:8];
+    wire [3:0] bcd_1 = time_sel[7:4];
+    wire [3:0] bcd_0 = time_sel[3:0];
+    wire [3:0] sr_dth_o;
+
+    mux_8x1 U_MUX_SR_DTH (
+        .sel           (digit_sel),
+        .digit_1       (bcd_0),
+        .digit_10      (bcd_1),
+        .digit_100     (bcd_2),
+        .digit_1000    (bcd_3),
+        .digit_dot_1   (4'hf),
+        .digit_dot_10  ((sel_display == 1'b0) ? 4'hE : 4'hf),
+        .digit_dot_100 (4'hf),
+        .digit_dot_1000(4'hf),
+        .mux_out       (sr_dth_o)
+    );
+
     // ------------------------------------------------------------
     // 2) Split each field into decimal digits (ones/tens)
     // ------------------------------------------------------------
@@ -119,6 +145,7 @@ module fnd_contr (
     // 4) Dot blink generator (based on cc field)
     // ------------------------------------------------------------
     wire dot_onoff;
+
     dot_onoff_comp U_DOT_COMP (
         .msec     (time_sel[6:0]),
         .dot_onoff(dot_onoff)
@@ -174,8 +201,10 @@ module fnd_contr (
     // ------------------------------------------------------------
     // 6) BCD nibble to 7-seg segments
     // ------------------------------------------------------------
+    wire [3:0] bcd_out_end = (in_dist || in_dht) ? sr_dth_o : bcd_nibble;
+
     bcd U_BCD (
-        .bcd     (bcd_nibble),
+        .bcd     (bcd_out_end),
         .fnd_data(fnd_data)
     );
 
@@ -320,6 +349,8 @@ module bcd (
             4'd7:  fnd_data = 8'hf8;
             4'd8:  fnd_data = 8'h80;
             4'd9:  fnd_data = 8'h90;
+            4'd10: fnd_data = 8'h92;
+            4'd11: fnd_data = 8'hAf;
 
             // Non-decimal codes
             4'd14: fnd_data = 8'h7f; // example: dot/marker

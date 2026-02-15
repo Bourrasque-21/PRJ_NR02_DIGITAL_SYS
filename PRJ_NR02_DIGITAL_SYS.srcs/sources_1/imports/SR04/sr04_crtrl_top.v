@@ -10,7 +10,6 @@ module sr04_ctrl_top (
 );
 
     wire w_tick_1us;
-    wire w_timeout;
 
 
     tick_gen_1us U_TICK_1us (
@@ -26,8 +25,7 @@ module sr04_ctrl_top (
         .start   (sr04_start),
         .echo    (echo),
         .trig    (trig),
-        .distance(distance),
-        .timeout ()
+        .distance(distance)
     );
 
 endmodule
@@ -43,8 +41,7 @@ module sr04_ctrl (
     input            start,
     input            echo,
     output reg       trig,
-    output reg [12:0] distance,
-    output reg       timeout
+    output reg [12:0] distance
 );
 
     localparam IDLE_S = 3'd0, TRIG_S = 3'd1, WAIT_S = 3'd2, CALC_S = 3'd3, CALC_S2 = 3'd4;
@@ -102,7 +99,6 @@ module sr04_ctrl (
             c_state     <= IDLE_S;
             trig        <= 1'b0;
             distance    <= 13'd0;
-            timeout     <= 1'b0;
             trig_cnt    <= 4'd0;
             echo_cnt    <= 15'd0;
             timeout_cnt <= 15'd0;
@@ -116,9 +112,9 @@ module sr04_ctrl (
                     echo_cnt    <= 15'd0;
                     timeout_cnt <= 15'd0;
                     distance_x10<= 19'd0;
+                    distance_div<= 19'd0;
                     if (start) begin
                         trig    <= 1'b1;
-                        timeout <= 1'b0;
                         c_state <= TRIG_S;
                     end
                 end
@@ -146,7 +142,6 @@ module sr04_ctrl (
                         if (tick_1) begin
                             if (timeout_cnt >= TIMEOUT_WAIT - 1) begin
                                 distance <= 13'd0;
-                                timeout  <= 1'b1;
                                 c_state  <= IDLE_S;
                             end else begin
                                 timeout_cnt <= timeout_cnt + 1;
@@ -158,13 +153,12 @@ module sr04_ctrl (
                 CALC_S: begin
                     if (echo_fall) begin
                         distance_x10 <= echo_cnt * 10;
-                        timeout  <= 1'b0;
+                        distance_div <= 19'd0;
                         c_state  <= CALC_S2;
                     end else if (tick_1) begin
                         echo_cnt <= echo_cnt + 1;
                         if (timeout_cnt >= TIMEOUT_CALC - 1) begin
                             distance <= 13'd0;
-                            timeout  <= 1'b1;
                             c_state  <= IDLE_S;
                         end else begin
                             timeout_cnt <= timeout_cnt + 1;
@@ -178,7 +172,6 @@ module sr04_ctrl (
                     distance_div <= distance_div + 1'b1;
                     end else begin
                     distance <= distance_div;
-                    timeout  <= 1'b0;
                     c_state <= IDLE_S;
                 end
                 end
@@ -213,3 +206,4 @@ module tick_gen_1us (
         end
     end
 endmodule
+

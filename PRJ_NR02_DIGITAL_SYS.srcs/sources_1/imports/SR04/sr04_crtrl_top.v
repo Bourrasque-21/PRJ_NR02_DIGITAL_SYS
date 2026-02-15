@@ -11,7 +11,6 @@ module sr04_ctrl_top (
 
     wire w_tick_1us;
 
-
     tick_gen_1us U_TICK_1us (
         .clk    (clk),
         .reset  (reset),
@@ -30,10 +29,6 @@ module sr04_ctrl_top (
 
 endmodule
 
-
-// =================
-// SR04 Module
-// =================
 module sr04_ctrl (
     input            clk,
     input            reset,
@@ -58,14 +53,11 @@ module sr04_ctrl (
 
     reg echo_n, echo_f;
     reg edge_reg, echo_rise, echo_fall;
-   
+
     wire echo_sync;
-   
+
     assign echo_sync = echo_n;
 
-    // ===================================
-    // Synchronizer
-    // ===================================
     always @(posedge clk or posedge reset) begin
         if (reset) begin
             echo_f <= 1'b0;
@@ -76,9 +68,6 @@ module sr04_ctrl (
         end
     end
 
-    // ===================================
-    // Edge detector
-    // ===================================
     always @(posedge clk or posedge reset) begin
         if (reset) begin
             edge_reg  <= 1'b0;
@@ -91,9 +80,6 @@ module sr04_ctrl (
         end
     end
 
-    // ===================================
-    // FSM
-    // ===================================
     always @(posedge clk, posedge reset) begin
         if (reset) begin
             c_state     <= IDLE_S;
@@ -122,7 +108,7 @@ module sr04_ctrl (
                 TRIG_S: begin
                     trig <= 1'b1;
                     if (tick_1) begin
-                        if (trig_cnt == 4'd10) begin  // 11us
+                        if (trig_cnt == 4'd10) begin
                             trig        <= 1'b0;
                             trig_cnt    <= 4'd0;
                             timeout_cnt <= 15'd0;
@@ -181,11 +167,6 @@ module sr04_ctrl (
 
 endmodule
 
-
-
-// ===================================
-// tick gen 1usec
-// ===================================
 module tick_gen_1us (
     input      clk,
     input      reset,
@@ -206,4 +187,3 @@ module tick_gen_1us (
         end
     end
 endmodule
-

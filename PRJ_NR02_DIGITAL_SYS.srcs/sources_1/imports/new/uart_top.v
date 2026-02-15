@@ -1,27 +1,5 @@
 `timescale 1ns / 1ps
 
-//============================================================
-// Module Name : uart_top
-// Description :
-//   UART command interface for the Stopwatch/Clock system.
-//
-//   RX Commands (ASCII)
-//   - 'R' : Generate a 1-cycle pulse on o_btn_r (mapped to Run/Stop or Up)
-//   - 'N' : Generate a 1-cycle pulse on o_btn_n (mapped to Next select)
-//   - 'C' : Generate a 1-cycle pulse on o_btn_c (mapped to Clear or Down)
-//   - 'M' : Toggle PC control mode (pc_ctrl_mode)
-//   - '0'~'4' : Toggle individual bits of pc_mode_sw[0..3]
-//   - 'Q' : Transmit current clock time over UART TX as ASCII
-//           format: "HH:MM:SS:CC\r\n"
-//
-// Notes
-//   - Echo is disabled: TX is driven only by uart_time_sender.
-//   - clock_time24 uses the same packing as your clock datapath:
-//       [23:19] hour (0..23)
-//       [18:13] min  (0..59)
-//       [12:7]  sec  (0..59)
-//       [6:0]   cc   (0..99)
-//============================================================
 module uart_top (
     input  wire clk,
     input  wire reset,
@@ -38,25 +16,19 @@ module uart_top (
     input wire [23:0] clock_time24
 );
 
-    // ------------------------------------------------------------
-    // UART RX path + TX FIFO path
-    // ------------------------------------------------------------
     wire       b_tick;
     wire       rx_done;
     wire [7:0] rx_data;
 
-    // TX FIFO <-> UART TX
     wire [7:0] w_tx_fifo_pop_data;
     wire       w_tx_fifo_full;
     wire       w_tx_fifo_empty;
     wire       w_tx_busy;
     wire       w_uart_tx_done;
 
-    // Time sender -> TX FIFO
     wire       w_time_tx_start;
     wire [7:0] w_time_tx_data;
 
-    // UART TX always sends data popped from TX FIFO
     uart_tx U_UART_TX (
         .clk     (clk),
         .reset   (reset),
@@ -68,7 +40,6 @@ module uart_top (
         .uart_tx (uart_tx)
     );
 
-    // TX FIFO stores bytes from uart_time_sender (triggered by 'Q')
     fifo U_FIFO_TX (
         .clk      (clk),
         .rst      (reset),
@@ -79,8 +50,6 @@ module uart_top (
         .full     (w_tx_fifo_full),
         .empty    (w_tx_fifo_empty)
     );
-
-
 
     uart_rx U_UART_RX (
         .clk    (clk),
@@ -97,7 +66,6 @@ module uart_top (
         .b_tick(b_tick)
     );
 
-    // Convert ASCII commands 'R','N','C' into 1-cycle pulses
     ascii_decoder U_ASCII_DECODER (
         .clk     (clk),
         .reset   (reset),
@@ -108,42 +76,34 @@ module uart_top (
         .in_btn_c(o_btn_c)
     );
 
-    // ------------------------------------------------------------
-    // PC Control Mode (toggle switches via UART)
-    // ------------------------------------------------------------
     always @(posedge clk or posedge reset) begin
         if (reset) begin
             pc_ctrl_mode <= 1'b0;
             pc_mode_sw   <= 5'b00000;
         end else if (rx_done) begin
             case (rx_data)
-                8'h4D:   pc_ctrl_mode <= ~pc_ctrl_mode;  // 'M'
-                8'h30:   pc_mode_sw[0] <= ~pc_mode_sw[0];  // '0'
-                8'h31:   pc_mode_sw[1] <= ~pc_mode_sw[1];  // '1'
-                8'h32:   pc_mode_sw[2] <= ~pc_mode_sw[2];  // '2'
-                8'h33:   pc_mode_sw[3] <= ~pc_mode_sw[3];  // '3'
-                8'h34:   pc_mode_sw[4] <= ~pc_mode_sw[4];  // '4'
-                default: ;  // hold state
+                8'h4D:   pc_ctrl_mode <= ~pc_ctrl_mode;
+                8'h30:   pc_mode_sw[0] <= ~pc_mode_sw[0];
+                8'h31:   pc_mode_sw[1] <= ~pc_mode_sw[1];
+                8'h32:   pc_mode_sw[2] <= ~pc_mode_sw[2];
+                8'h33:   pc_mode_sw[3] <= ~pc_mode_sw[3];
+                8'h34:   pc_mode_sw[4] <= ~pc_mode_sw[4];
             endcase
         end
     end
 
-    // ------------------------------------------------------------
-    // 'Q' command: send current time as ASCII via TX
-    // ------------------------------------------------------------
-    wire       cmd_q = rx_done && (rx_data == 8'h51);  // 'Q'
+    wire       cmd_q = rx_done && (rx_data == 8'h51);
 
-    // Unpack clock_time24
     wire [4:0] hour = clock_time24[23:19];
-    wire [5:0] min = clock_time24[18:13];
-    wire [5:0] sec = clock_time24[12:7];
-    wire [6:0] cc = clock_time24[6:0];
+    wire [5:0] min  = clock_time24[18:13];
+    wire [5:0] sec  = clock_time24[12:7];
+    wire [6:0] cc   = clock_time24[6:0];
 
     uart_time_sender U_TIME_SENDER (
         .clk     (clk),
         .reset   (reset),
-        .start   (cmd_q),     // 1-cycle pulse on 'Q'
-        .tx_done (w_uart_tx_done),   // 1-cycle pulse after each transmitted byte
+        .start   (cmd_q),
+        .tx_done (w_uart_tx_done),
         .tx_start(w_time_tx_start),
         .tx_data (w_time_tx_data),
         .hour    (hour),
@@ -152,18 +112,8 @@ module uart_top (
         .cc      (cc)
     );
 
-
-
 endmodule
 
-//============================================================
-// Module Name : uart_rx
-// Description :
-//   UART receiver (8N1) with 16x oversampling tick (b_tick).
-//   - Detects start bit, samples in the middle of each bit.
-//   - Shifts in 8 data bits (LSB first assumed in the stream).
-//   - Generates rx_done pulse at end of stop bit.
-//============================================================
 module uart_rx (
     input  wire       clk,
     input  wire       reset,
@@ -186,7 +136,6 @@ module uart_rx (
     assign rx_data = buf_reg;
     assign rx_done = done_reg;
 
-    // State registers
     always @(posedge clk or posedge reset) begin
         if (reset) begin
             c_state        <= IDLE;
@@ -203,7 +152,6 @@ module uart_rx (
         end
     end
 
-    // Next-state logic
     always @(*) begin
         n_state         = c_state;
         b_tick_cnt_next = b_tick_cnt_reg;
@@ -216,7 +164,6 @@ module uart_rx (
                 b_tick_cnt_next = 4'd0;
                 bit_cnt_next    = 3'd0;
 
-                // Start bit detect (rx goes low)
                 if (b_tick && !rx) begin
                     buf_next = 8'd0;
                     n_state  = START;
@@ -224,7 +171,7 @@ module uart_rx (
             end
 
             START: begin
-                // Wait half bit (8 ticks) to sample center of start bit
+
                 if (b_tick) begin
                     if (b_tick_cnt_reg == 4'd7) begin
                         b_tick_cnt_next = 4'd0;
@@ -240,8 +187,6 @@ module uart_rx (
                     if (b_tick_cnt_reg == 4'd15) begin
                         b_tick_cnt_next = 4'd0;
 
-                        // Shift in sampled bit (rx) into MSB side
-                        // (Works with your existing testbench and data ordering)
                         buf_next = {rx, buf_reg[7:1]};
 
                         if (bit_cnt_reg == 3'd7) begin
@@ -259,7 +204,7 @@ module uart_rx (
                 if (b_tick) begin
                     if (b_tick_cnt_reg == 4'd15) begin
                         n_state   = IDLE;
-                        done_next = 1'b1;  // one-cycle pulse
+                        done_next = 1'b1;
                     end else begin
                         b_tick_cnt_next = b_tick_cnt_reg + 1'b1;
                     end
@@ -273,13 +218,6 @@ module uart_rx (
     end
 endmodule
 
-//============================================================
-// Module Name : uart_tx
-// Description :
-//   UART transmitter (8N1) using 16x oversampling tick (b_tick).
-//   - tx_start must be a 1-cycle pulse.
-//   - tx_done pulses for 1 cycle at the end of the stop bit.
-//============================================================
 module uart_tx (
     input  wire       clk,
     input  wire       reset,
@@ -310,7 +248,6 @@ module uart_tx (
     assign tx_busy = busy_reg;
     assign tx_done = done_reg;
 
-    // State/register update
     always @(posedge clk or posedge reset) begin
         if (reset) begin
             current_state   <= IDLE;
@@ -331,7 +268,6 @@ module uart_tx (
         end
     end
 
-    // Next-state logic
     always @(*) begin
         next_state       = current_state;
         tx_next          = tx_reg;
@@ -343,7 +279,7 @@ module uart_tx (
 
         case (current_state)
             IDLE: begin
-                tx_next         = 1'b1;  // idle line high
+                tx_next         = 1'b1;
                 busy_next       = 1'b0;
                 bit_cnt_next    = 3'd0;
                 b_tick_cnt_next = 4'd0;
@@ -356,7 +292,7 @@ module uart_tx (
             end
 
             START: begin
-                tx_next = 1'b0;  // start bit
+                tx_next = 1'b0;
                 if (b_tick) begin
                     if (b_tick_cnt_reg == 4'd15) begin
                         b_tick_cnt_next = 4'd0;
@@ -368,7 +304,7 @@ module uart_tx (
             end
 
             DATA: begin
-                tx_next = data_in_buf_reg[0];  // LSB first
+                tx_next = data_in_buf_reg[0];
                 if (b_tick) begin
                     if (b_tick_cnt_reg == 4'd15) begin
                         b_tick_cnt_next = 4'd0;
@@ -386,11 +322,11 @@ module uart_tx (
             end
 
             STOP: begin
-                tx_next = 1'b1;  // stop bit
+                tx_next = 1'b1;
                 if (b_tick) begin
                     if (b_tick_cnt_reg == 4'd15) begin
                         next_state = IDLE;
-                        done_next  = 1'b1;  // one-cycle pulse
+                        done_next  = 1'b1;
                     end else begin
                         b_tick_cnt_next = b_tick_cnt_reg + 1'b1;
                     end
@@ -404,13 +340,6 @@ module uart_tx (
     end
 endmodule
 
-//============================================================
-// Module Name : baud_tick
-// Description :
-//   Generates 16x oversampling tick for UART.
-//   - BAUDRATE is set to (baud * 16).
-//   - b_tick is a 1-cycle pulse at the desired tick rate.
-//============================================================
 module baud_tick (
     input  wire clk,
     input  wire reset,
@@ -438,14 +367,6 @@ module baud_tick (
     end
 endmodule
 
-//============================================================
-// Module Name : ascii_decoder
-// Description :
-//   Decodes RX ASCII commands and generates 1-cycle pulses.
-//   - 'R' => in_btn_r pulse
-//   - 'N' => in_btn_n pulse
-//   - 'C' => in_btn_c pulse
-//============================================================
 module ascii_decoder (
     input  wire       clk,
     input  wire       reset,
@@ -461,16 +382,16 @@ module ascii_decoder (
             in_btn_n <= 1'b0;
             in_btn_c <= 1'b0;
         end else begin
-            // default: outputs are 1-cycle pulses
+
             in_btn_r <= 1'b0;
             in_btn_n <= 1'b0;
             in_btn_c <= 1'b0;
 
             if (rx_done) begin
                 case (rx_data)
-                    8'h52:   in_btn_r <= 1'b1;  // 'R'
-                    8'h4E:   in_btn_n <= 1'b1;  // 'N'
-                    8'h43:   in_btn_c <= 1'b1;  // 'C'
+                    8'h52:   in_btn_r <= 1'b1;
+                    8'h4E:   in_btn_n <= 1'b1;
+                    8'h43:   in_btn_c <= 1'b1;
                     default: ;
                 endcase
             end
@@ -478,23 +399,12 @@ module ascii_decoder (
     end
 endmodule
 
-//============================================================
-// Module Name : uart_time_sender
-// Description :
-//   Sends the current time over UART as ASCII when 'start' is pulsed.
-//   Format: "HH:MM:SS:CC\r\n" (13 bytes)
-//
-// Handshake
-//   - tx_start : 1-cycle pulse to uart_tx to send tx_data.
-//   - tx_done  : 1-cycle pulse from uart_tx after a byte is fully sent.
-//   - The FSM advances to the next byte only when tx_done is observed.
-//============================================================
 module uart_time_sender (
     input wire clk,
     input wire reset,
 
-    input wire start,   // 1-cycle pulse (trigger)
-    input wire tx_done, // 1-cycle pulse per transmitted byte
+    input wire start,
+    input wire tx_done,
 
     output reg       tx_start,
     output reg [7:0] tx_data,
@@ -505,10 +415,6 @@ module uart_time_sender (
     input wire [6:0] cc
 );
 
-    // ------------------------------------------------------------
-    // Convert numeric fields to decimal digits (tens/ones)
-    // ASCII digit = '0'(0x30) + value(0..9)
-    // ------------------------------------------------------------
     wire [3:0] h1 = hour % 10;
     wire [3:0] h10 = hour / 10;
     wire [3:0] m1 = min % 10;
@@ -518,29 +424,23 @@ module uart_time_sender (
     wire [3:0] c1 = cc % 10;
     wire [3:0] c10 = cc / 10;
 
-    // ------------------------------------------------------------
-    // Message buffer (13 bytes): "HH:MM:SS:CC\r\n"
-    // ------------------------------------------------------------
     reg [7:0] msg[0:12];
     always @(*) begin
         msg[0]  = 8'h30 + h10;
         msg[1]  = 8'h30 + h1;
-        msg[2]  = 8'h3A;  // ':'
+        msg[2]  = 8'h3A;
         msg[3]  = 8'h30 + m10;
         msg[4]  = 8'h30 + m1;
-        msg[5]  = 8'h3A;  // ':'
+        msg[5]  = 8'h3A;
         msg[6]  = 8'h30 + s10;
         msg[7]  = 8'h30 + s1;
-        msg[8]  = 8'h3A;  // ':'
+        msg[8]  = 8'h3A;
         msg[9]  = 8'h30 + c10;
         msg[10] = 8'h30 + c1;
-        msg[11] = 8'h0D;  // '\r'
-        msg[12] = 8'h0A;  // '\n'
+        msg[11] = 8'h0D;
+        msg[12] = 8'h0A;
     end
 
-    // ------------------------------------------------------------
-    // FSM: IDLE -> SEND -> WAIT(tx_done) -> SEND next byte -> ...
-    // ------------------------------------------------------------
     localparam S_IDLE = 2'd0;
     localparam S_SEND = 2'd1;
     localparam S_WAIT = 2'd2;
@@ -574,7 +474,7 @@ module uart_time_sender (
 
             S_SEND: begin
                 tx_data  = msg[idx];
-                tx_start = 1'b1;  // one-cycle pulse
+                tx_start = 1'b1;
                 state_n  = S_WAIT;
             end
 
@@ -593,4 +493,3 @@ module uart_time_sender (
     end
 
 endmodule
-

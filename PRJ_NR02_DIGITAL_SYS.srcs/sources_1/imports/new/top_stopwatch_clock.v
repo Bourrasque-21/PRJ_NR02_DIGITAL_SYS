@@ -1,31 +1,5 @@
 `timescale 1ns / 1ps
 
-//============================================================
-// Module Name : top_stopwatch_watch
-// Description :
-//   Top-level integration of:
-//     - Stopwatch datapath
-//     - Clock (timekeeping) datapath with time-set feature
-//     - 7-segment (FND) display controller
-//     - UART interface for PC control and time query ('Q')
-//
-//   Input Sources
-//   - Physical push buttons (btn_8, btn_5, btn_2) are debounced.
-//   - UART can generate virtual button pulses (R/N/C) and PC-mode
-//     switch overrides (M, 0~3).
-//
-//   Mode Switch Map (mode_sw[3:0])
-//   - [0] : Stopwatch count direction (0=up, 1=down)
-//   - [1] : 0=Stopwatch mode, 1=Clock mode
-//   - [2] : FND page select (0=sec/cc, 1=hour/min)
-//   - [3] : Time-set enable (effective only in Clock mode)
-//
-//   Key Behavior
-//   - In PC control mode, mode_sw_com is overridden by pc_mode_sw.
-//   - In Clock + Time-set mode, buttons are re-mapped:
-//       btn_8 -> clk_up, btn_2 -> clk_down, btn_5 -> clk_next
-//   - In Stopwatch mode, buttons control run/stop and clear.
-//============================================================
 module top_stopwatch_watch (
     input wire clk,
     input wire reset,
@@ -49,58 +23,40 @@ module top_stopwatch_watch (
     output wire       pc_mode_led
 );
 
-    // ------------------------------------------------------------
-    // Internal time buses
-    // ------------------------------------------------------------
-    wire [25:0] w_stopwatch_time; // {hour[25:19], min[18:13], sec[12:7], cc[6:0]}
-    wire [23:0] w_clock_time;  // {hour[23:19], min[18:13], sec[12:7], cc[6:0]}
+    wire [25:0] w_stopwatch_time;
+    wire [23:0] w_clock_time;
     wire [12:0] w_distance;
-    // Stopwatch mode select (direction)
+
     wire w_mode;
 
-    // ------------------------------------------------------------
-    // Debounced button signals (physical)
-    // ------------------------------------------------------------
     wire i_btn_8;
     wire i_btn_5;
     wire i_btn_2;
     wire w_sr04_btn;
-    // ------------------------------------------------------------
-    // Clock control signals (time-set)
-    // ------------------------------------------------------------
+
     wire clock_mode;
     wire time_set_mode;
     wire clk_next, clk_up, clk_down;
 
-    // ------------------------------------------------------------
-    // UART-generated virtual button pulses (R/N/C)
-    // ------------------------------------------------------------
     wire       or_btn_r;
     wire       or_btn_n;
     wire       or_btn_c;
 
-    // ------------------------------------------------------------
-    // PC control mode (switch override)
-    // ------------------------------------------------------------
     wire       pc_ctrl_mode;
     wire [4:0] pc_mode_sw;
 
-    // ------------------------------------------------------------
-    // Combined inputs (UART OR physical)
-    // ------------------------------------------------------------
-    wire       i_run_stop;  // Run/Stop in stopwatch or Up in time-set
-    wire       i_clear;  // Clear in stopwatch or Down in time-set
-    wire       cu_btn_5;  // Next select in time-set
-    wire [4:0] mode_sw_com;  // final mode switches after PC override
+    wire       i_run_stop;
+    wire       i_clear;
+    wire       cu_btn_5;
+    wire [4:0] mode_sw_com;
 
     wire [1:0] w_led_sel = {mode_sw_com[4], mode_sw_com[1]};
     wire [1:0] w_sys_mod = {mode_sw_com[4], mode_sw_com[1]};
     wire [3:0] w_clk_sel_led;
 
-    //wire [4:0] w_dist_m  = w_distance % 10; 
-    wire [3:0] w_dist_c0 = (w_distance) % 10; 
+    wire [3:0] w_dist_c0 = (w_distance) % 10;
     wire [3:0] w_dist_c1 = (w_distance / 10) % 10;
-    wire [3:0] w_dist_c2 = (w_distance / 100) % 10; 
+    wire [3:0] w_dist_c2 = (w_distance / 100) % 10;
     wire [3:0] w_dist_c3 = w_distance / 1000;
 
     wire [25:0] w_dist_num = {10'd10, w_dist_c3, w_dist_c2, w_dist_c1, w_dist_c0};
@@ -113,7 +69,6 @@ module top_stopwatch_watch (
     wire       w_mode_dht11 = (w_sys_mod == 2'b11);
 
     assign w_sr04_btn = w_mode_sr04 & w_sr04_out;
-    //assign w_mode_dht11 = w_mode_dht11 &
 
     assign w_sw_clk_out0 = (or_btn_r | i_btn_8) & w_mode_swclk;
     assign w_sw_clk_out1 = (or_btn_c | i_btn_2) & w_mode_swclk;
@@ -123,16 +78,13 @@ module top_stopwatch_watch (
     assign i_clear    = w_sw_clk_out1;
     assign cu_btn_5   = w_sw_clk_out2;
 
-    // PC mode override mux
     assign mode_sw_com = pc_ctrl_mode ? pc_mode_sw : mode_sw;
     assign pc_mode_led = pc_ctrl_mode;
 
-    // time-set 우선, 아니면 소스 표시
-    assign out_led = (w_led_sel == 2'b11) ? 4'b0011 :  // 11
-        (w_led_sel == 2'b10) ? 4'b0010 :  // 10
-        (w_led_sel == 2'b01) ? (time_set_mode ? w_clk_sel_led : 4'b0001)  // 01
-        : 4'b0000;  // 00
-
+    assign out_led = (w_led_sel == 2'b11) ? 4'b0011 :
+        (w_led_sel == 2'b10) ? 4'b0010 :
+        (w_led_sel == 2'b01) ? (time_set_mode ? w_clk_sel_led : 4'b0001)
+        : 4'b0000;
 
     sr04_ctrl_top U_SR04_CTRL (
         .clk(clk),
@@ -150,9 +102,6 @@ module top_stopwatch_watch (
         .o_btn(w_sr04_out)
     );
 
-    // ------------------------------------------------------------
-    // UART top: receives commands + can transmit clock time on 'Q'
-    // ------------------------------------------------------------
     uart_top U_UART (
         .clk    (clk),
         .reset  (reset),
@@ -166,13 +115,9 @@ module top_stopwatch_watch (
         .pc_ctrl_mode(pc_ctrl_mode),
         .pc_mode_sw  (pc_mode_sw),
 
-        // Clock time input for ASCII time transmit
         .clock_time24(w_clock_time)
     );
 
-    // ------------------------------------------------------------
-    // Clock datapath (runs continuously; time-set gates ticking)
-    // ------------------------------------------------------------
     clk_datapath U_CLOCK_DATAPATH (
         .clk  (clk),
         .reset(reset),
@@ -191,9 +136,6 @@ module top_stopwatch_watch (
         .led(w_clk_sel_led)
     );
 
-    // ------------------------------------------------------------
-    // Button debounce blocks (physical)
-    // ------------------------------------------------------------
     btn_debounce U_BTN_8 (
         .clk  (clk),
         .reset(reset),
@@ -215,16 +157,13 @@ module top_stopwatch_watch (
         .o_btn(i_btn_5)
     );
 
-    // ------------------------------------------------------------
-    // Control unit: stopwatch FSM + clock/time-set button mapping
-    // ------------------------------------------------------------
-    wire o_btn_8;  // stopwatch run enable (level)
-    wire o_btn_2;  // stopwatch clear pulse
+    wire o_btn_8;
+    wire o_btn_2;
 
     control_unit U_CONTROL_UNIT (
         .clk    (clk),
         .reset  (reset),
-        .mode_sw(mode_sw_com[3:0]),
+        .mode_sw({mode_sw_com[3], mode_sw_com[1], mode_sw_com[0]}),
 
         .i_run_stop(i_run_stop),
         .i_clear   (i_clear),
@@ -241,9 +180,6 @@ module top_stopwatch_watch (
         .clk_down     (clk_down)
     );
 
-    // ------------------------------------------------------------
-    // Stopwatch datapath
-    // ------------------------------------------------------------
     stopwatch_datapath U_STOPWATCH_DATAPATH (
         .clk     (clk),
         .reset   (reset),
@@ -257,11 +193,6 @@ module top_stopwatch_watch (
         .hour(w_stopwatch_time[25:19])
     );
 
-    // ------------------------------------------------------------
-    // 7-seg display controller
-    // - sel_display    : selects page within the selected time source
-    // - sel_display_2  : selects time source (clock vs stopwatch)
-    // ------------------------------------------------------------
     fnd_contr U_FND_CTRL (
         .clk          (clk),
         .reset        (reset),
@@ -277,12 +208,6 @@ module top_stopwatch_watch (
 
 endmodule
 
-//============================================================
-// Stopwatch datapath
-// - Cascaded counters: cc(0..99) -> sec(0..59) -> min(0..59) -> hour(0..99)
-// - Supports up/down counting based on mode_sw
-// - run_stop gates counting; clear resets all counters
-//============================================================
 module stopwatch_datapath (
     input wire clk,
     input wire reset,
@@ -299,7 +224,6 @@ module stopwatch_datapath (
     wire w_tick_100hz;
     wire w_sec_tick, w_min_tick, w_hour_tick;
 
-    // 100 Hz tick (10 ms period)
     tick_gen_100hz U_tick_gen (
         .clk         (clk),
         .reset       (reset),
@@ -307,7 +231,6 @@ module stopwatch_datapath (
         .o_tick_100hz(w_tick_100hz)
     );
 
-    // hour: 0..99
     tick_counter #(
         .BIT_WIDTH(7),
         .TIMES(100)
@@ -322,9 +245,8 @@ module stopwatch_datapath (
         .o_tick  ()
     );
 
-    // min: 0..59
     tick_counter #(
-        .BIT_WIDTH(7),
+        .BIT_WIDTH(6),
         .TIMES(60)
     ) min_counter (
         .clk     (clk),
@@ -337,9 +259,8 @@ module stopwatch_datapath (
         .o_tick  (w_hour_tick)
     );
 
-    // sec: 0..59
     tick_counter #(
-        .BIT_WIDTH(7),
+        .BIT_WIDTH(6),
         .TIMES(60)
     ) sec_counter (
         .clk     (clk),
@@ -352,7 +273,6 @@ module stopwatch_datapath (
         .o_tick  (w_min_tick)
     );
 
-    // cc (centi-second): 0..99
     tick_counter #(
         .BIT_WIDTH(7),
         .TIMES(100)
@@ -369,12 +289,6 @@ module stopwatch_datapath (
 
 endmodule
 
-//============================================================
-// Generic tick-driven counter
-// - If run_stop=1 and i_tick pulses, counter updates.
-// - mode=0: up-count, mode=1: down-count
-// - o_tick pulses when the counter wraps.
-//============================================================
 module tick_counter #(
     parameter BIT_WIDTH = 7,
     parameter TIMES     = 100
@@ -406,7 +320,7 @@ module tick_counter #(
         o_tick       = 1'b0;
 
         if (i_tick & run_stop) begin
-            // mode=1: down count
+
             if (mode) begin
                 if (counter_reg == 0) begin
                     counter_next = TIMES - 1;
@@ -414,7 +328,7 @@ module tick_counter #(
                 end else begin
                     counter_next = counter_reg - 1'b1;
                 end
-            end  // mode=0: up count
+            end
             else begin
                 if (counter_reg == (TIMES - 1)) begin
                     counter_next = 0;
@@ -428,9 +342,6 @@ module tick_counter #(
 
 endmodule
 
-//============================================================
-// 100 Hz tick generator (1-cycle pulse when enabled)
-//============================================================
 module tick_gen_100hz (
     input  wire clk,
     input  wire reset,
@@ -460,13 +371,6 @@ module tick_gen_100hz (
     end
 endmodule
 
-//============================================================
-// Clock datapath with time-set mode
-// - Normal mode: ticks at 100 Hz and cascades up to hour.
-// - Time-set mode: disables tick (en_tick=0) and allows manual
-//   up/down edits on the selected field.
-// - LED shows current selection (hour/min/sec/cc) when time-set.
-//============================================================
 module clk_datapath (
     input wire clk,
     input wire reset,
@@ -492,7 +396,6 @@ module clk_datapath (
         .o_tick_100hz(tick_100hz)
     );
 
-    // Select which field to edit (only active in clock + time-set)
     wire [1:0] sel;
     select_unit U_SEL (
         .clk     (clk),
@@ -502,7 +405,6 @@ module clk_datapath (
         .sel     (sel)
     );
 
-    // Disable tick while time-setting (freeze time)
     wire en_tick = !(sw_time_set && clock_mode);
 
     wire sec_tick, min_tick, hour_tick;
@@ -584,10 +486,6 @@ module clk_datapath (
     assign c_min  = min;
     assign c_hour = hour;
 
-    // LED indication:
-    // - Off in stopwatch mode
-    // - All on in normal clock mode
-    // - One-hot indicates selected field in time-set mode
     always @(*) begin
         if (reset) led = 4'b0000;
         else begin
@@ -602,9 +500,6 @@ module clk_datapath (
 
 endmodule
 
-//============================================================
-// Selection unit for time-set mode (cycles through 4 fields)
-//============================================================
 module select_unit (
     input  wire       clk,
     input  wire       reset,
@@ -621,11 +516,6 @@ module select_unit (
     end
 endmodule
 
-//============================================================
-// Counter with two modes:
-//  - Normal tick counting (en_tick && i_tick)
-//  - Manual set mode (set_en && sel_me) using up/down pulses
-//============================================================
 module set_counter #(
     parameter WIDTH = 7,
     parameter MAX   = 100
@@ -633,13 +523,11 @@ module set_counter #(
     input wire clk,
     input wire reset,
 
-    // normal count
     input  wire             en_tick,
     input  wire             i_tick,
     output reg              o_tick,
     output wire [WIDTH-1:0] count,
 
-    // time-set
     input wire set_en,
     input wire sel_me,
     input wire up,
@@ -649,7 +537,6 @@ module set_counter #(
     reg [WIDTH-1:0] counter_reg, counter_next;
     assign count = counter_reg;
 
-    // o_tick for normal counting only (wrap indicator)
     always @(*) begin
         o_tick = 1'b0;
         if (en_tick && i_tick) begin
@@ -657,11 +544,9 @@ module set_counter #(
         end
     end
 
-    // next-state logic
     always @(*) begin
         counter_next = counter_reg;
 
-        // manual time-set has priority over normal ticking
         if (set_en && sel_me) begin
             if (up && !down) begin
                 if (counter_reg == (MAX - 1)) counter_next = 0;
@@ -676,7 +561,6 @@ module set_counter #(
         end
     end
 
-    // register
     always @(posedge clk or posedge reset) begin
         if (reset) counter_reg <= 0;
         else counter_reg <= counter_next;

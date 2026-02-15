@@ -94,15 +94,23 @@ module top_stopwatch_watch (
     wire [4:0] mode_sw_com;  // final mode switches after PC override
 
     wire [1:0] w_led_sel = {mode_sw_com[4], mode_sw_com[1]};
+    wire [1:0] w_sys_mod = {mode_sw_com[4], mode_sw_com[1]};
     wire [3:0] w_clk_sel_led;
 
     wire [5:0] w_dist_m = w_distance / 100;
     wire [6:0] w_dist_c = w_distance % 100;
 
+    wire w_sr04_out;
+    wire w_mode_sr04 = (w_sys_mod == 2'b10);
+    //wire w_mode_dht11 = (w_sys_mod == 2'b11);
+
+    assign w_sr04_btn = w_mode_sr04 & w_sr04_out;
+    //assign w_mode_dht11 = w_mode_dht11 &
+
     assign i_run_stop = or_btn_r | i_btn_8;
     assign i_clear = or_btn_c | i_btn_2;
     assign cu_btn_5 = or_btn_n | i_btn_5;
-
+    
     // PC mode override mux
     assign mode_sw_com = pc_ctrl_mode ? pc_mode_sw : mode_sw;
     assign pc_mode_led = pc_ctrl_mode;
@@ -127,7 +135,7 @@ module top_stopwatch_watch (
         .clk  (clk),
         .reset(reset),
         .i_btn(sr04_start),
-        .o_btn(w_sr04_btn)
+        .o_btn(w_sr04_out)
     );
 
     // ------------------------------------------------------------

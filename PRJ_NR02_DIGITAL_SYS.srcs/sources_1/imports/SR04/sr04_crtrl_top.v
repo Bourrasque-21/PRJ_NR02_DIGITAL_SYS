@@ -47,15 +47,17 @@ module sr04_ctrl (
     output reg       timeout
 );
 
-    localparam IDLE_S = 2'b00, TRIG_S = 2'b01, WAIT_S = 2'b10, CALC_S = 2'b11;
+    localparam IDLE_S = 3'd0, TRIG_S = 3'd1, WAIT_S = 3'd2, CALC_S = 3'd3, CALC_S2 = 3'd4;
 
     parameter TIMEOUT_WAIT = 30000;
     parameter TIMEOUT_CALC = 25000;
 
-    reg [ 1:0] c_state;
+    reg [ 2:0] c_state;
     reg [ 3:0] trig_cnt;
     reg [14:0] echo_cnt;
     reg [14:0] timeout_cnt;
+    reg [18:0] distance_x10;
+    reg [18:0] distance_div;
 
     reg echo_n, echo_f;
     reg edge_reg, echo_rise, echo_fall;
@@ -102,15 +104,18 @@ module sr04_ctrl (
             distance    <= 13'd0;
             timeout     <= 1'b0;
             trig_cnt    <= 4'd0;
-            echo_cnt    <= 14'd0;
+            echo_cnt    <= 15'd0;
             timeout_cnt <= 15'd0;
+            distance_x10<= 19'd0;
+            distance_div<= 19'd0;
         end else begin
             case (c_state)
                 IDLE_S: begin
                     trig        <= 1'b0;
                     trig_cnt    <= 4'd0;
-                    echo_cnt    <= 14'd0;
+                    echo_cnt    <= 15'd0;
                     timeout_cnt <= 15'd0;
+                    distance_x10<= 19'd0;
                     if (start) begin
                         trig    <= 1'b1;
                         timeout <= 1'b0;
@@ -152,9 +157,9 @@ module sr04_ctrl (
 
                 CALC_S: begin
                     if (echo_fall) begin
-                        distance <= (echo_cnt * 10) / 58;
+                        distance_x10 <= echo_cnt * 10;
                         timeout  <= 1'b0;
-                        c_state  <= IDLE_S;
+                        c_state  <= CALC_S2;
                     end else if (tick_1) begin
                         echo_cnt <= echo_cnt + 1;
                         if (timeout_cnt >= TIMEOUT_CALC - 1) begin
@@ -165,6 +170,17 @@ module sr04_ctrl (
                             timeout_cnt <= timeout_cnt + 1;
                         end
                     end
+                end
+
+                CALC_S2: begin
+                    if(distance_x10 >= 19'd58) begin
+                    distance_x10 <= distance_x10 - 19'd58;
+                    distance_div <= distance_div + 1'b1;
+                    end else begin
+                    distance <= distance_div;
+                    timeout  <= 1'b0;
+                    c_state <= IDLE_S;
+                end
                 end
             endcase
         end

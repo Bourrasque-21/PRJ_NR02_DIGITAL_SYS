@@ -26,8 +26,6 @@ module dht11_top (
 endmodule
 
 
-
-
 module dht11_controller (
     input clk,
     input reset,
@@ -39,7 +37,7 @@ module dht11_controller (
     output reg dht11_valid,
     // output [3:0] debug,
 
-    inout dhtio  // wire type
+    inout dhtio 
 );
 
     wire clk_10us;
@@ -50,7 +48,7 @@ module dht11_controller (
         .clk_10us(clk_10us)
     );
 
-    //state
+    
     parameter IDLE = 3'd0, START = 3'd1, WAIT = 3'd2, SYNC_L = 3'd3, SYNC_H = 3'd4;
     parameter DATA_SYNC = 3'd5, DATA_C = 3'd6, STOP = 3'd7;
 
@@ -58,23 +56,27 @@ module dht11_controller (
     reg [2:0] c_state, n_state;
     reg dhtio_reg, dhtio_next;
     reg io_sel_reg, io_sel_next;
-    //18ms count
+
     reg [10:0] tick_cnt_reg, tick_cnt_next;
     reg [39:0] data_reg, data_next;
     reg [5:0] data_cnt_next, data_cnt_reg;
 
-    reg [16:0] timeout_rst_reg, timeout_rst_next;
-    reg [22:0] auto_cnt_reg, auto_cnt_next;
+    reg [16:0] timeout_rst_reg, timeout_rst_next; // Watchdog timer
+    reg [22:0] auto_cnt_reg, auto_cnt_next;       // for auto start count
 
-    wire [7:0] data_ht_int = data_reg[39:32];
-    wire [7:0] data_ht_dec = data_reg[31:24];
-    wire [7:0] data_temp_int = data_reg[23:16];
-    wire [7:0] data_temp_dec = data_reg[15:8];
-    wire [7:0] data_check_sum = data_reg[7:0];
+    wire [7:0] data_ht_int    = data_reg[39:32]; // humidity i
+    wire [7:0] data_ht_dec    = data_reg[31:24]; // humidity d
+    wire [7:0] data_temp_int  = data_reg[23:16]; // temperature i
+    wire [7:0] data_temp_dec  = data_reg[15:8];  // temperature d
+    wire [7:0] data_check_sum = data_reg[7:0];   // checksum
 
+    // Calculate DHT11 checksum
     wire [7:0] check_valid = data_ht_int + data_ht_dec + data_temp_int + data_temp_dec;
 
-    assign dhtio = (io_sel_reg) ? dhtio_reg : 1'bz; // if io_sel = 0, board circuit open - sensor data drive
+    // Tri-state control for single-wire bus:
+    //   io_sel_reg = 1 -> FPGA drives dhtio with dhtio_reg
+    //   io_sel_reg = 0 -> FPGA releases bus (Hi-Z), sensor drives dhtio
+    assign dhtio = (io_sel_reg) ? dhtio_reg : 1'bz;
 
 
     always @(posedge clk, posedge reset) begin
@@ -106,12 +108,13 @@ module dht11_controller (
                 dht11_valid <= 1'b0;
             end
 
+            // Validate data using checksum
             if (c_state == STOP && n_state == IDLE) begin
                 if (check_valid == data_check_sum) begin
                     dht11_valid <= 1'b1;
-                    ht <= {data_ht_int, data_ht_dec};
-                    temp <= {data_temp_int, data_temp_dec};
                     dht11_done <= 1'b1;
+                    ht   <= {data_ht_int, data_ht_dec};
+                    temp <= {data_temp_int, data_temp_dec};
                 end else begin
                     dht11_valid <= 1'b0;
                 end
@@ -119,9 +122,6 @@ module dht11_controller (
         end
     end
 
-
-
-    //next output
     always @(*) begin
         n_state    = c_state;
         dhtio_next = dhtio_reg;
@@ -139,6 +139,7 @@ module dht11_controller (
             end
         end
 
+        // Watchdog timer: if stuck non-IDLE, reset FSM
         if (c_state != IDLE && timeout_rst_reg >= 17'd99_999) begin
             n_state = IDLE;
             dhtio_next = 1'b1;
@@ -153,7 +154,7 @@ module dht11_controller (
                     tick_cnt_next = 0;
                     data_cnt_next = 0;
                     if (clk_10us) begin
-                        if (auto_cnt_reg == 23'd6_000_000 - 1) begin
+                        if (auto_cnt_reg == 23'd6_000_000 - 1) begin // Auto start every 60s
                             auto_cnt_next = 0;
                             n_state = START;
                         end else begin
@@ -208,6 +209,8 @@ module dht11_controller (
                         end
                     end
                 end
+
+                // Shift left, save bit in LSB
                 DATA_C: begin
                     if (clk_10us) begin
                         if (dhtio == 1) begin
@@ -232,7 +235,6 @@ module dht11_controller (
                     if (clk_10us) begin
                         tick_cnt_next = tick_cnt_reg + 1;
                         if (tick_cnt_reg == 5) begin  //need 50us to stop
-                            //output mode
                             io_sel_next = 1'b1;
                             dhtio_next = 1'b1;
                             n_state = IDLE;
@@ -246,9 +248,9 @@ module dht11_controller (
 endmodule
 
 
-//=================
-//  tick gen 10usec
-//=================
+//=======================
+//  tick generator 10usec
+//=======================
 module tick_gen_10us (
     input clk,
     input reset,

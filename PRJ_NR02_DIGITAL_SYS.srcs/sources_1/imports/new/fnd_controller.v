@@ -17,6 +17,7 @@ module fnd_contr (
     output wire [7:0]  fnd_data
 );
 
+    wire        clk_1khz;
     wire [25:0] time_sel;
 
     mux_4x1_set U_MODE_SEL (
@@ -28,17 +29,20 @@ module fnd_contr (
         .o_mux (time_sel)
     );
 
-    wire in_dist = (sel_display_2 == 2'b10);
-    wire in_dht  = (sel_display_2 == 2'b11);
+    wire in_dist = (sel_display_2 == 2'b10); // SR04 display mode
+    wire in_dht  = (sel_display_2 == 2'b11); // DHT11 display mode
 
+    //BCD data for SR04, DHT11
     wire [3:0] bcd_3 = time_sel[15:12];
     wire [3:0] bcd_2 = time_sel[11:8];
     wire [3:0] bcd_1 = time_sel[7:4];
     wire [3:0] bcd_0 = time_sel[3:0];
-    wire [3:0] sr_dth_o;
-    wire       clk_1khz;
-    wire [2:0] digit_sel;
 
+    wire [3:0] sr_dth_o;  // Selected digit data (SR04 / DHT11)
+    wire [2:0] digit_sel; // digit index selector
+
+    // MUX for SR04, DHT11 
+    // display format: (Sr04/XXX.X | hXX.X/tXX.X)
     mux_8x1 U_MUX_SR_DHT (
         .sel           (digit_sel),
         .digit_1       (bcd_0),

@@ -64,9 +64,9 @@ set_property -dict { PACKAGE_PIN W4   IOSTANDARD LVCMOS33 } [get_ports {fnd_digi
 
 
 ##Buttons
-set_property -dict { PACKAGE_PIN U18   IOSTANDARD LVCMOS33 } [get_ports dht11_btn_start] 
+set_property -dict { PACKAGE_PIN U18   IOSTANDARD LVCMOS33 } [get_ports btn_5] 
 set_property -dict { PACKAGE_PIN T18   IOSTANDARD LVCMOS33 } [get_ports btn_8] 
-set_property -dict { PACKAGE_PIN W19   IOSTANDARD LVCMOS33 } [get_ports btn_5] 
+set_property -dict { PACKAGE_PIN W19   IOSTANDARD LVCMOS33 } [get_ports dht11_btn_start] 
 set_property -dict { PACKAGE_PIN T17   IOSTANDARD LVCMOS33 } [get_ports sr04_start] 
 set_property -dict { PACKAGE_PIN U17   IOSTANDARD LVCMOS33 } [get_ports btn_2] 
 ## mid / up / L / R/ down

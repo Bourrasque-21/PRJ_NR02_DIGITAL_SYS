@@ -1,5 +1,11 @@
 `timescale 1ns / 1ps
 
+//=============================================================
+// Module: top_stopwatch_watch
+// Description:
+//   Basys3 Digital System top integration.
+//   (stopwatch + clock + SR04 + DHT11 + UART PC control)
+//=============================================================
 module top_stopwatch_watch (
     input wire clk,
     input wire reset,
@@ -27,6 +33,9 @@ module top_stopwatch_watch (
     inout dhtio
 );
 
+//=============================================================
+//  Wire declarations
+//=============================================================
     wire [25:0] w_stopwatch_time;
     wire [23:0] w_clock_time;
     wire [12:0] w_distance;
@@ -43,62 +52,69 @@ module top_stopwatch_watch (
     wire time_set_mode;
     wire clk_next, clk_up, clk_down;
 
+    // UART buttons
     wire or_btn_r;
     wire or_btn_n;
     wire or_btn_c;
     wire or_btn_sr;
     wire or_btn_dht;
 
+    // control unit outputs
     wire o_btn_8;
     wire o_btn_2;
 
+    // PC override
     wire pc_ctrl_mode;
     wire [4:0] pc_mode_sw;
 
+    // Unified control inputs
     wire i_run_stop;
     wire i_clear;
     wire cu_btn_5;
     wire [4:0] mode_sw_com;
 
-    wire [1:0] w_led_sel = {mode_sw_com[4], mode_sw_com[1]};
-    wire [1:0] w_sys_mod = {mode_sw_com[4], mode_sw_com[1]};
-    wire [3:0] w_clk_sel_led;
+    // Mode decode / LED select
+    wire [1:0] w_sys_mod = {mode_sw_com[4], mode_sw_com[1]}; // System mode
+    wire [1:0] w_led_sel = {mode_sw_com[4], mode_sw_com[1]}; // LED display (same as system mode)
+    wire [3:0] w_clk_sel_led; // Clock time-set digit indicator
 
+    // SR04 display digits
     wire [3:0] w_dist_c0 = (w_distance) % 10;
     wire [3:0] w_dist_c1 = (w_distance / 10) % 10;
     wire [3:0] w_dist_c2 = (w_distance / 100) % 10;
     wire [3:0] w_dist_c3 = w_distance / 1000;
 
-    wire [25:0] w_dist_num = {
-        10'd0, w_dist_c3, w_dist_c2, w_dist_c1, w_dist_c0
-    };
-    wire [25:0] w_sr04_label = {10'd0, 4'd10, 4'd11, 4'd0, 4'd4};
-    wire [25:0] fnd_data_dist = (mode_sw_com[2] ? w_sr04_label : w_dist_num);
+    // {[S] [r] [0] [4] / [X] [X] [X] [X]}
+    wire [25:0] w_dist_num = {10'd0, w_dist_c3, w_dist_c2, w_dist_c1, w_dist_c0}; // distance display
+    wire [25:0] w_sr04_label = {10'd0, 4'd10, 4'd11, 4'd0, 4'd4}; // label display
+    wire [25:0] fnd_data_dist = (mode_sw_com[2] ? w_sr04_label : w_dist_num); // toggle (label / distance)
 
+    // Mode gated botton pulses
     wire w_sr04_out, w_dht11_out, w_sw_clk_out0, w_sw_clk_out1, w_sw_clk_out2;
-    wire w_mode_swclk = (w_sys_mod == 2'b00) || (w_sys_mod == 2'b01);
-    wire w_mode_sr04 = (w_sys_mod == 2'b10);
-    wire w_mode_dht11 = (w_sys_mod == 2'b11);
+    wire w_mode_swclk = (w_sys_mod == 2'b00) || (w_sys_mod == 2'b01); // stopwatch/clock
+    wire w_mode_sr04  = (w_sys_mod == 2'b10);                         // SR04
+    wire w_mode_dht11 = (w_sys_mod == 2'b11);                         // DHT11
 
+    // DHT11 data / formats
     wire [15:0] w_dht11_temp, w_dht11_hum;
     wire w_dht11_done, w_dht11_valid;
 
     wire [3:0] w_dht11_temp_1i = w_dht11_temp[15:8] % 10;
     wire [3:0] w_dht11_temp_10i = w_dht11_temp[15:8] / 10;
-    // wire [3:0] w_dht11_temp_d = w_dht11_temp % 10;
+    // wire [3:0] w_dht11_temp_d = w_dht11_temp % 10; // temperature decimal
     wire [3:0] w_dht11_hum_1i = w_dht11_hum[15:8] % 10;
     wire [3:0] w_dht11_hum_10i = w_dht11_hum[15:8] / 10;
-    // wire [3:0] w_dht11_hum_d  = w_dht11_hum  % 10;
+    // wire [3:0] w_dht11_hum_d  = w_dht11_hum  % 10; // humidity decimal
 
-    wire [25:0] w_fnd_dht11_temp = {
-        10'd0, 4'd12, w_dht11_temp_10i, w_dht11_temp_1i, 4'd0
-    };
-    wire [25:0] w_fnd_dht11_hum = {
-        10'd0, 4'd13, w_dht11_hum_10i, w_dht11_hum_1i, 4'd0
-    };
+    // {[h] [10] [1] [0.1] / [t] [10] [1] [0.1]}
+    wire [25:0] w_fnd_dht11_temp = {10'd0, 4'd12, w_dht11_temp_10i, w_dht11_temp_1i, 4'd0};
+    wire [25:0] w_fnd_dht11_hum  = {10'd0, 4'd13, w_dht11_hum_10i, w_dht11_hum_1i, 4'd0};
+    wire [25:0] fnd_dht11_data = (mode_sw_com[2] ? w_fnd_dht11_hum : w_fnd_dht11_temp); // toggle (humidity / temperature)
 
-    wire [25:0] fnd_dht11_data = (mode_sw_com[2] ? w_fnd_dht11_hum : w_fnd_dht11_temp);
 
+//=============================================================
+//  Combinational assignments
+//=============================================================
     assign dht11_valid = w_dht11_valid;
 
     assign w_sr04_btn = w_mode_sr04 & (or_btn_sr | w_sr04_out);
@@ -116,64 +132,13 @@ module top_stopwatch_watch (
     assign pc_mode_led = pc_ctrl_mode;
 
     assign out_led = (w_led_sel == 2'b11) ? 4'b0011 :
-        (w_led_sel == 2'b10) ? 4'b0010 :
-        (w_led_sel == 2'b01) ? (time_set_mode ? w_clk_sel_led : 4'b0001)
-        : 4'b0000;
+                     (w_led_sel == 2'b10) ? 4'b0010 :
+                     (w_led_sel == 2'b01) ? (time_set_mode ? w_clk_sel_led : 4'b0001)
+                    : 4'b0000;
 
-    sr04_ctrl_top U_SR04_CTRL (
-        .clk(clk),
-        .reset(reset),
-        .echo(echo),
-        .sr04_start(w_sr04_btn),
-        .trig(trig),
-        .distance(w_distance)
-    );
-
-    btn_debounce U_SR04_BTN (
-        .clk  (clk),
-        .reset(reset),
-        .i_btn(sr04_start),
-        .o_btn(w_sr04_out)
-    );
-
-    uart_top U_UART (
-        .clk    (clk),
-        .reset  (reset),
-        .uart_rx(uart_rx),
-        .uart_tx(uart_tx),
-
-        .o_btn_r  (or_btn_r),
-        .o_btn_n  (or_btn_n),
-        .o_btn_c  (or_btn_c),
-        .o_btn_sr (or_btn_sr),
-        .o_btn_dht(or_btn_dht),
-
-        .pc_ctrl_mode(pc_ctrl_mode),
-        .pc_mode_sw  (pc_mode_sw),
-
-        .clock_time24(w_clock_time),
-        .dht11_temp_data(w_dht11_temp),
-        .dht_ht_data(w_dht11_hum)
-    );
-
-    clk_datapath U_CLOCK_DATAPATH (
-        .clk  (clk),
-        .reset(reset),
-
-        .sw_time_set(time_set_mode),
-        .btn_next   (clk_next),
-        .up_count   (clk_up),
-        .down_count (clk_down),
-        .clock_mode (clock_mode),
-
-        .c_msec(w_clock_time[6:0]),
-        .c_sec (w_clock_time[12:7]),
-        .c_min (w_clock_time[18:13]),
-        .c_hour(w_clock_time[23:19]),
-
-        .led(w_clk_sel_led)
-    );
-
+//=============================================================
+//  Submodules - button debounce
+//=============================================================
     btn_debounce U_BTN_8 (
         .clk  (clk),
         .reset(reset),
@@ -195,37 +160,102 @@ module top_stopwatch_watch (
         .o_btn(i_btn_5)
     );
 
-    control_unit U_CONTROL_UNIT (
-        .clk    (clk),
-        .reset  (reset),
-        .mode_sw({mode_sw_com[3], mode_sw_com[1], mode_sw_com[0]}),
-
-        .i_run_stop(i_run_stop),
-        .i_clear   (i_clear),
-        .cu_btn_5  (cu_btn_5),
-
-        .o_mode_sw (w_mode),
-        .o_run_stop(o_btn_8),
-        .o_clear   (o_btn_2),
-
-        .clock_mode   (clock_mode),
-        .time_set_mode(time_set_mode),
-        .clk_next     (clk_next),
-        .clk_up       (clk_up),
-        .clk_down     (clk_down)
+    btn_debounce U_SR04_BTN (
+        .clk  (clk),
+        .reset(reset),
+        .i_btn(sr04_start),
+        .o_btn(w_sr04_out)
     );
 
+    btn_debounce U_DHT11_BTN (
+        .clk  (clk),
+        .reset(reset),
+        .i_btn(dht11_btn_start),
+        .o_btn(w_dht11_out)
+    );
+
+//=============================================================
+//  Submodules - stopwatch, clock, SR04, DHT11, UART, control unit, FND
+//=============================================================  
     stopwatch_datapath U_STOPWATCH_DATAPATH (
         .clk     (clk),
         .reset   (reset),
         .mode_sw (w_mode),
         .clear   (o_btn_2),
         .run_stop(o_btn_8),
-
         .msec(w_stopwatch_time[6:0]),
         .sec (w_stopwatch_time[12:7]),
         .min (w_stopwatch_time[18:13]),
         .hour(w_stopwatch_time[25:19])
+    );
+
+    clk_datapath U_CLOCK_DATAPATH (
+        .clk  (clk),
+        .reset(reset),
+        .sw_time_set(time_set_mode),
+        .btn_next   (clk_next),
+        .up_count   (clk_up),
+        .down_count (clk_down),
+        .clock_mode (clock_mode),
+        .c_msec(w_clock_time[6:0]),
+        .c_sec (w_clock_time[12:7]),
+        .c_min (w_clock_time[18:13]),
+        .c_hour(w_clock_time[23:19]),
+        .led(w_clk_sel_led)
+    );
+
+    sr04_ctrl_top U_SR04_CTRL (
+        .clk(clk),
+        .reset(reset),
+        .echo(echo),
+        .sr04_start(w_sr04_btn),
+        .trig(trig),
+        .distance(w_distance)
+    );
+
+    dht11_top U_DHT11_UNIT (
+        .clk(clk),
+        .reset(reset),
+        .dht11_btn_start(w_dht11_btn),
+        .dht11_ht_data(w_dht11_hum),
+        .dht11_temp_data(w_dht11_temp),
+        .dht11_valid(w_dht11_valid),
+        .dht11_done(w_dht11_done),
+        .dhtio(dhtio)
+    );
+
+    uart_top U_UART (
+        .clk    (clk),
+        .reset  (reset),
+        .uart_rx(uart_rx),
+        .uart_tx(uart_tx),
+        .o_btn_r  (or_btn_r),
+        .o_btn_n  (or_btn_n),
+        .o_btn_c  (or_btn_c),
+        .o_btn_sr (or_btn_sr),
+        .o_btn_dht(or_btn_dht),
+        .pc_ctrl_mode(pc_ctrl_mode),
+        .pc_mode_sw  (pc_mode_sw),
+        .clock_time24(w_clock_time),
+        .dht11_temp_data(w_dht11_temp),
+        .dht_ht_data(w_dht11_hum)
+    );
+
+    control_unit U_CONTROL_UNIT (
+        .clk    (clk),
+        .reset  (reset),
+        .mode_sw({mode_sw_com[3], mode_sw_com[1], mode_sw_com[0]}),
+        .i_run_stop(i_run_stop),
+        .i_clear   (i_clear),
+        .cu_btn_5  (cu_btn_5),
+        .o_mode_sw (w_mode),
+        .o_run_stop(o_btn_8),
+        .o_clear   (o_btn_2),
+        .clock_mode   (clock_mode),
+        .time_set_mode(time_set_mode),
+        .clk_next     (clk_next),
+        .clk_up       (clk_up),
+        .clk_down     (clk_down)
     );
 
     fnd_contr U_FND_CTRL (
@@ -241,26 +271,12 @@ module top_stopwatch_watch (
         .fnd_data     (fnd_data)
     );
 
-    dht11_top U_DHT11_UNIT (
-        .clk(clk),
-        .reset(reset),
-        .dht11_btn_start(w_dht11_btn),
-        .dht11_ht_data(w_dht11_hum),
-        .dht11_temp_data(w_dht11_temp),
-        .dht11_valid(w_dht11_valid),
-        .dht11_done(w_dht11_done),
-        .dhtio(dhtio)
-    );
-
-    btn_debounce U_DHT11_BTN (
-        .clk  (clk),
-        .reset(reset),
-        .i_btn(dht11_btn_start),
-        .o_btn(w_dht11_out)
-    );
-
 endmodule
 
+
+//=============================================================
+// Stopwatch_datapath
+//=============================================================
 module stopwatch_datapath (
     input wire clk,
     input wire reset,
@@ -342,6 +358,9 @@ module stopwatch_datapath (
 
 endmodule
 
+//=============================================================
+// Tick_counter
+//=============================================================
 module tick_counter #(
     parameter BIT_WIDTH = 7,
     parameter TIMES     = 100
@@ -394,6 +413,10 @@ module tick_counter #(
 
 endmodule
 
+
+//=============================================================
+// Tick_generator_100hz
+//=============================================================
 module tick_gen_100hz (
     input  wire clk,
     input  wire reset,
@@ -423,6 +446,10 @@ module tick_gen_100hz (
     end
 endmodule
 
+
+//=============================================================
+// Clock_datapath
+//=============================================================
 module clk_datapath (
     input wire clk,
     input wire reset,
@@ -552,6 +579,10 @@ module clk_datapath (
 
 endmodule
 
+
+//=============================================================
+// Select_unit
+//=============================================================
 module select_unit (
     input  wire       clk,
     input  wire       reset,
@@ -568,6 +599,10 @@ module select_unit (
     end
 endmodule
 
+
+//=============================================================
+// Set_counter
+//=============================================================
 module set_counter #(
     parameter WIDTH = 7,
     parameter MAX   = 100

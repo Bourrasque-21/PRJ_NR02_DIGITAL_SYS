@@ -35,6 +35,15 @@ module uart_top (
     wire       w_tx_start = (~w_tx_busy) & (~w_tx_fifo_empty);
     wire       w_tx_push = w_time_tx_start & (~w_tx_fifo_full);
 
+    wire       q = rx_done && (rx_data == 8'h51); // 'Q'
+
+    wire [4:0] hour = clock_time24[23:19];
+    wire [5:0] min = clock_time24[18:13];
+    wire [5:0] sec = clock_time24[12:7];
+    wire [6:0] cc = clock_time24[6:0];
+    wire [7:0] temp_int = dht11_temp_data[15:8];
+    wire [7:0] ht_int = dht_ht_data[15:8];
+
     uart_tx U_UART_TX (
         .clk     (clk),
         .reset   (reset),
@@ -84,36 +93,10 @@ module uart_top (
         .in_btn_dht(o_btn_dht)
     );
 
-    always @(posedge clk or posedge reset) begin
-        if (reset) begin
-            pc_ctrl_mode <= 1'b0;
-            pc_mode_sw   <= 5'b00000;
-        end else if (rx_done) begin
-            case (rx_data)
-                8'h4D: pc_ctrl_mode <= ~pc_ctrl_mode;
-                8'h30: pc_mode_sw[0] <= ~pc_mode_sw[0];
-                8'h31: pc_mode_sw[1] <= ~pc_mode_sw[1];
-                8'h32: pc_mode_sw[2] <= ~pc_mode_sw[2];
-                8'h33: pc_mode_sw[3] <= ~pc_mode_sw[3];
-                8'h34: pc_mode_sw[4] <= ~pc_mode_sw[4];
-                default: ;
-            endcase
-        end
-    end
-
-    wire       cmd_q = rx_done && (rx_data == 8'h51);
-
-    wire [4:0] hour = clock_time24[23:19];
-    wire [5:0] min = clock_time24[18:13];
-    wire [5:0] sec = clock_time24[12:7];
-    wire [6:0] cc = clock_time24[6:0];
-    wire [7:0] temp_int = dht11_temp_data[15:8];
-    wire [7:0] ht_int = dht_ht_data[15:8];
-
     uart_time_sender U_TIME_SENDER (
         .clk     (clk),
         .reset   (reset),
-        .start   (cmd_q),
+        .start   (q),
         .tx_done (w_uart_tx_done),
         .tx_start(w_time_tx_start),
         .tx_data (w_time_tx_data),
@@ -125,7 +108,25 @@ module uart_top (
         .ht_int  (ht_int)
     );
 
+    // PC mode
+    always @(posedge clk or posedge reset) begin
+        if (reset) begin
+            pc_ctrl_mode <= 1'b0;
+            pc_mode_sw   <= 5'b00000;
+        end else if (rx_done) begin
+            case (rx_data)
+                8'h4D:   pc_ctrl_mode <= ~pc_ctrl_mode;   // 'M'  
+                8'h30:   pc_mode_sw[0] <= ~pc_mode_sw[0]; // '0'
+                8'h31:   pc_mode_sw[1] <= ~pc_mode_sw[1]; // '1'
+                8'h32:   pc_mode_sw[2] <= ~pc_mode_sw[2]; // '2'
+                8'h33:   pc_mode_sw[3] <= ~pc_mode_sw[3]; // '3'
+                8'h34:   pc_mode_sw[4] <= ~pc_mode_sw[4]; // '4'
+                default: ;
+            endcase
+        end
+    end
 endmodule
+
 
 module uart_rx (
     input  wire       clk,
@@ -230,6 +231,7 @@ module uart_rx (
         endcase
     end
 endmodule
+
 
 module uart_tx (
     input  wire       clk,
@@ -380,6 +382,10 @@ module baud_tick (
     end
 endmodule
 
+
+//=============================================================
+// ASCII Decoder
+//=============================================================
 module ascii_decoder (
     input  wire       clk,
     input  wire       reset,
@@ -419,10 +425,13 @@ module ascii_decoder (
     end
 endmodule
 
+
+//=============================================================
+// ASCII Sender
+//=============================================================
 module uart_time_sender (
     input wire clk,
     input wire reset,
-
     input wire start,
     input wire tx_done,
 
@@ -455,40 +464,41 @@ module uart_time_sender (
     wire [3:0] ht10 = ht_int / 10;
 
     reg [7:0] msg[0:30];
+    
     always @(*) begin
-        msg[0]  = 8'h30 + h10;
-        msg[1]  = 8'h30 + h1;
-        msg[2]  = 8'h3A;
-        msg[3]  = 8'h30 + m10;
-        msg[4]  = 8'h30 + m1;
-        msg[5]  = 8'h3A;
-        msg[6]  = 8'h30 + s10;
-        msg[7]  = 8'h30 + s1;
-        msg[8]  = 8'h3A;
-        msg[9]  = 8'h30 + c10;
-        msg[10] = 8'h30 + c1;
-        msg[11] = 8'h0D;
-        msg[12] = 8'h0A;
+        msg[0]  = 8'h30 + h10; // H
+        msg[1]  = 8'h30 + h1;  // H
+        msg[2]  = 8'h3A;       // :
+        msg[3]  = 8'h30 + m10; // M  
+        msg[4]  = 8'h30 + m1;  // M
+        msg[5]  = 8'h3A;       // :
+        msg[6]  = 8'h30 + s10; // S 
+        msg[7]  = 8'h30 + s1;  // S 
+        msg[8]  = 8'h3A;       // :
+        msg[9]  = 8'h30 + c10; // C 
+        msg[10] = 8'h30 + c1;  // C 
+        msg[11] = 8'h0D;       // \r
+        msg[12] = 8'h0A;       // \n
 
-        msg[13] = 8'h54;
-        msg[14] = 8'h20;
-        msg[15] = 8'h30 + temp10;
-        msg[16] = 8'h30 + temp1;
-        msg[17] = 8'h2E;
-        msg[18] = 8'h30;
-        msg[19] = 8'h43;
-        msg[20] = 8'h0D;
-        msg[21] = 8'h0A;
+        msg[13] = 8'h54;          // T
+        msg[14] = 8'h20;          // 
+        msg[15] = 8'h30 + temp10; // X    
+        msg[16] = 8'h30 + temp1;  // X    
+        msg[17] = 8'h2E;          // .
+        msg[18] = 8'h30;          // X
+        msg[19] = 8'h43;          // C
+        msg[20] = 8'h0D;          // \r
+        msg[21] = 8'h0A;          // \n 
 
-        msg[22] = 8'h48;
-        msg[23] = 8'h20;
-        msg[24] = 8'h30 + ht10;
-        msg[25] = 8'h30 + ht1;
-        msg[26] = 8'h2E;
-        msg[27] = 8'h30;
-        msg[28] = 8'h25;
-        msg[29] = 8'h0D;
-        msg[30] = 8'h0A;
+        msg[22] = 8'h48;          // H
+        msg[23] = 8'h20;          // 
+        msg[24] = 8'h30 + ht10;   // X    
+        msg[25] = 8'h30 + ht1;    // X    
+        msg[26] = 8'h2E;          // .
+        msg[27] = 8'h30;          // X
+        msg[28] = 8'h25;          // %
+        msg[29] = 8'h0D;          // \r
+        msg[30] = 8'h0A;          // \n 
     end
 
     localparam S_IDLE = 2'd0;

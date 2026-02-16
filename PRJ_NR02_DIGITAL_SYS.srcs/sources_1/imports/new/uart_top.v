@@ -6,14 +6,17 @@ module uart_top (
     input  wire uart_rx,
     output wire uart_tx,
 
-    output wire o_btn_r,
-    output wire o_btn_n,
-    output wire o_btn_c,
-    output wire o_btn_sr,
+    output wire       o_btn_r,
+    output wire       o_btn_n,
+    output wire       o_btn_c,
+    output wire       o_btn_sr,
+    output wire       o_btn_dht,
     output reg        pc_ctrl_mode,
     output reg  [4:0] pc_mode_sw,
 
-    input wire [23:0] clock_time24
+    input wire [23:0] clock_time24,
+    input wire [15:0] dht11_temp_data,
+    input wire [15:0] dht_ht_data
 );
 
     wire       b_tick;
@@ -29,10 +32,13 @@ module uart_top (
     wire       w_time_tx_start;
     wire [7:0] w_time_tx_data;
 
+    wire       w_tx_start = (~w_tx_busy) & (~w_tx_fifo_empty);
+    wire       w_tx_push = w_time_tx_start & (~w_tx_fifo_full);
+
     uart_tx U_UART_TX (
         .clk     (clk),
         .reset   (reset),
-        .tx_start(~w_tx_fifo_empty),
+        .tx_start(w_tx_start),
         .b_tick  (b_tick),
         .tx_data (w_tx_fifo_pop_data),
         .tx_busy (w_tx_busy),
@@ -43,8 +49,8 @@ module uart_top (
     fifo U_FIFO_TX (
         .clk      (clk),
         .rst      (reset),
-        .push     (w_time_tx_start),
-        .pop      (~w_tx_busy),
+        .push     (w_tx_push),
+        .pop      (w_tx_start),
         .push_data(w_time_tx_data),
         .pop_data (w_tx_fifo_pop_data),
         .full     (w_tx_fifo_full),
@@ -67,14 +73,15 @@ module uart_top (
     );
 
     ascii_decoder U_ASCII_DECODER (
-        .clk      (clk),
-        .reset    (reset),
-        .rx_data  (rx_data),
-        .rx_done  (rx_done),
-        .in_btn_r (o_btn_r),
-        .in_btn_n (o_btn_n),
-        .in_btn_c (o_btn_c),
-        .in_btn_sr(o_btn_sr)
+        .clk       (clk),
+        .reset     (reset),
+        .rx_data   (rx_data),
+        .rx_done   (rx_done),
+        .in_btn_r  (o_btn_r),
+        .in_btn_n  (o_btn_n),
+        .in_btn_c  (o_btn_c),
+        .in_btn_sr (o_btn_sr),
+        .in_btn_dht(o_btn_dht)
     );
 
     always @(posedge clk or posedge reset) begin
@@ -89,6 +96,7 @@ module uart_top (
                 8'h32: pc_mode_sw[2] <= ~pc_mode_sw[2];
                 8'h33: pc_mode_sw[3] <= ~pc_mode_sw[3];
                 8'h34: pc_mode_sw[4] <= ~pc_mode_sw[4];
+                default: ;
             endcase
         end
     end
@@ -99,6 +107,8 @@ module uart_top (
     wire [5:0] min = clock_time24[18:13];
     wire [5:0] sec = clock_time24[12:7];
     wire [6:0] cc = clock_time24[6:0];
+    wire [7:0] temp_int = dht11_temp_data[15:8];
+    wire [7:0] ht_int = dht_ht_data[15:8];
 
     uart_time_sender U_TIME_SENDER (
         .clk     (clk),
@@ -110,7 +120,9 @@ module uart_top (
         .hour    (hour),
         .min     (min),
         .sec     (sec),
-        .cc      (cc)
+        .cc      (cc),
+        .temp_int(temp_int),
+        .ht_int  (ht_int)
     );
 
 endmodule
@@ -376,26 +388,30 @@ module ascii_decoder (
     output reg        in_btn_r,
     output reg        in_btn_n,
     output reg        in_btn_c,
-    output reg        in_btn_sr
+    output reg        in_btn_sr,
+    output reg        in_btn_dht
 );
     always @(posedge clk or posedge reset) begin
         if (reset) begin
-            in_btn_r  <= 1'b0;
-            in_btn_n  <= 1'b0;
-            in_btn_c  <= 1'b0;
-            in_btn_sr <= 1'b0;
+            in_btn_r   <= 1'b0;
+            in_btn_n   <= 1'b0;
+            in_btn_c   <= 1'b0;
+            in_btn_sr  <= 1'b0;
+            in_btn_dht <= 1'b0;
         end else begin
-            in_btn_r  <= 1'b0;
-            in_btn_n  <= 1'b0;
-            in_btn_c  <= 1'b0;
-            in_btn_sr <= 1'b0;
+            in_btn_r   <= 1'b0;
+            in_btn_n   <= 1'b0;
+            in_btn_c   <= 1'b0;
+            in_btn_sr  <= 1'b0;
+            in_btn_dht <= 1'b0;
 
             if (rx_done) begin
                 case (rx_data)
-                    8'h52:   in_btn_r  <= 1'b1;
-                    8'h4E:   in_btn_n  <= 1'b1;
-                    8'h43:   in_btn_c  <= 1'b1;
+                    8'h52:   in_btn_r <= 1'b1;
+                    8'h4E:   in_btn_n <= 1'b1;
+                    8'h43:   in_btn_c <= 1'b1;
                     8'h54:   in_btn_sr <= 1'b1;
+                    8'h48:   in_btn_dht <= 1'b1;
                     default: ;
                 endcase
             end
@@ -416,7 +432,12 @@ module uart_time_sender (
     input wire [4:0] hour,
     input wire [5:0] min,
     input wire [5:0] sec,
-    input wire [6:0] cc
+    input wire [6:0] cc,
+
+    input wire [7:0] temp_int,
+    // input wire [7:0] temp_dec,
+    input wire [7:0] ht_int
+    // input wire [7:0] ht_dec
 );
 
     wire [3:0] h1 = hour % 10;
@@ -428,7 +449,12 @@ module uart_time_sender (
     wire [3:0] c1 = cc % 10;
     wire [3:0] c10 = cc / 10;
 
-    reg [7:0] msg[0:12];
+    wire [3:0] temp1 = temp_int % 10;
+    wire [3:0] temp10 = temp_int / 10;
+    wire [3:0] ht1 = ht_int % 10;
+    wire [3:0] ht10 = ht_int / 10;
+
+    reg [7:0] msg[0:30];
     always @(*) begin
         msg[0]  = 8'h30 + h10;
         msg[1]  = 8'h30 + h1;
@@ -443,6 +469,26 @@ module uart_time_sender (
         msg[10] = 8'h30 + c1;
         msg[11] = 8'h0D;
         msg[12] = 8'h0A;
+
+        msg[13] = 8'h54;
+        msg[14] = 8'h20;
+        msg[15] = 8'h30 + temp10;
+        msg[16] = 8'h30 + temp1;
+        msg[17] = 8'h2E;
+        msg[18] = 8'h30;
+        msg[19] = 8'h43;
+        msg[20] = 8'h0D;
+        msg[21] = 8'h0A;
+
+        msg[22] = 8'h48;
+        msg[23] = 8'h20;
+        msg[24] = 8'h30 + ht10;
+        msg[25] = 8'h30 + ht1;
+        msg[26] = 8'h2E;
+        msg[27] = 8'h30;
+        msg[28] = 8'h25;
+        msg[29] = 8'h0D;
+        msg[30] = 8'h0A;
     end
 
     localparam S_IDLE = 2'd0;
@@ -450,12 +496,12 @@ module uart_time_sender (
     localparam S_WAIT = 2'd2;
 
     reg [1:0] state, state_n;
-    reg [3:0] idx, idx_n;
+    reg [4:0] idx, idx_n;
 
     always @(posedge clk or posedge reset) begin
         if (reset) begin
             state <= S_IDLE;
-            idx   <= 4'd0;
+            idx   <= 5'd0;
         end else begin
             state <= state_n;
             idx   <= idx_n;
@@ -471,7 +517,7 @@ module uart_time_sender (
         case (state)
             S_IDLE: begin
                 if (start) begin
-                    idx_n   = 4'd0;
+                    idx_n   = 5'd0;
                     state_n = S_SEND;
                 end
             end
@@ -484,7 +530,7 @@ module uart_time_sender (
 
             S_WAIT: begin
                 if (tx_done) begin
-                    if (idx == 4'd12) state_n = S_IDLE;
+                    if (idx == 5'd30) state_n = S_IDLE;
                     else begin
                         idx_n   = idx + 1'b1;
                         state_n = S_SEND;

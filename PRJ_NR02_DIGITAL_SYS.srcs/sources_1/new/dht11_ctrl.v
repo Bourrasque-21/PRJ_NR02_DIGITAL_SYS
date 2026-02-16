@@ -12,20 +12,11 @@ module dht11_top (
 
     inout dhtio
 );
-
-    wire w_btn_s;
     
-    btn_debounce U_BTN (
-        .clk  (clk),
-        .reset(reset),
-        .i_btn(dht11_btn_start),
-        .o_btn(w_btn_s)
-    );
-
     dht11_controller U_DHT11 (
         .clk(clk),
         .reset(reset),
-        .start(w_btn_s),
+        .start(dht11_btn_start),
         .ht(dht11_ht_data),
         .temp(dht11_temp_data),
         .dht11_done(dht11_done),

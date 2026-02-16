@@ -144,6 +144,7 @@ module f_control_unit #(
                 end
 
             end
+            default: ;
         endcase
     end
 

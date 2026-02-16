@@ -161,6 +161,7 @@ module sr04_ctrl (
                     c_state <= IDLE_S;
                 end
                 end
+                default: c_state <= IDLE_S;
             endcase
         end
     end

@@ -37,6 +37,7 @@ module top_stopwatch_watch (
     wire i_btn_5;
     wire i_btn_2;
     wire w_sr04_btn;
+    wire w_dht11_btn;
 
     wire clock_mode;
     wire time_set_mode;
@@ -46,6 +47,10 @@ module top_stopwatch_watch (
     wire or_btn_n;
     wire or_btn_c;
     wire or_btn_sr;
+    wire or_btn_dht;
+
+    wire o_btn_8;
+    wire o_btn_2;
 
     wire pc_ctrl_mode;
     wire [4:0] pc_mode_sw;
@@ -64,16 +69,40 @@ module top_stopwatch_watch (
     wire [3:0] w_dist_c2 = (w_distance / 100) % 10;
     wire [3:0] w_dist_c3 = w_distance / 1000;
 
-    wire [25:0] w_dist_num = {10'd0, w_dist_c3, w_dist_c2, w_dist_c1, w_dist_c0};
+    wire [25:0] w_dist_num = {
+        10'd0, w_dist_c3, w_dist_c2, w_dist_c1, w_dist_c0
+    };
     wire [25:0] w_sr04_label = {10'd0, 4'd10, 4'd11, 4'd0, 4'd4};
     wire [25:0] fnd_data_dist = (mode_sw_com[2] ? w_sr04_label : w_dist_num);
 
-    wire w_sr04_out, w_sw_clk_out0, w_sw_clk_out1, w_sw_clk_out2;
+    wire w_sr04_out, w_dht11_out, w_sw_clk_out0, w_sw_clk_out1, w_sw_clk_out2;
     wire w_mode_swclk = (w_sys_mod == 2'b00) || (w_sys_mod == 2'b01);
     wire w_mode_sr04 = (w_sys_mod == 2'b10);
     wire w_mode_dht11 = (w_sys_mod == 2'b11);
 
+    wire [15:0] w_dht11_temp, w_dht11_hum;
+    wire w_dht11_done, w_dht11_valid;
+
+    wire [3:0] w_dht11_temp_1i = w_dht11_temp[15:8] % 10;
+    wire [3:0] w_dht11_temp_10i = w_dht11_temp[15:8] / 10;
+    // wire [3:0] w_dht11_temp_d = w_dht11_temp % 10;
+    wire [3:0] w_dht11_hum_1i = w_dht11_hum[15:8] % 10;
+    wire [3:0] w_dht11_hum_10i = w_dht11_hum[15:8] / 10;
+    // wire [3:0] w_dht11_hum_d  = w_dht11_hum  % 10;
+
+    wire [25:0] w_fnd_dht11_temp = {
+        10'd0, 4'd12, w_dht11_temp_10i, w_dht11_temp_1i, 4'd0
+    };
+    wire [25:0] w_fnd_dht11_hum = {
+        10'd0, 4'd13, w_dht11_hum_10i, w_dht11_hum_1i, 4'd0
+    };
+
+    wire [25:0] fnd_dht11_data = (mode_sw_com[2] ? w_fnd_dht11_hum : w_fnd_dht11_temp);
+
+    assign dht11_valid = w_dht11_valid;
+
     assign w_sr04_btn = w_mode_sr04 & (or_btn_sr | w_sr04_out);
+    assign w_dht11_btn = w_mode_dht11 & (or_btn_dht | w_dht11_out);
 
     assign w_sw_clk_out0 = (or_btn_r | i_btn_8) & w_mode_swclk;
     assign w_sw_clk_out1 = (or_btn_c | i_btn_2) & w_mode_swclk;
@@ -117,11 +146,14 @@ module top_stopwatch_watch (
         .o_btn_n  (or_btn_n),
         .o_btn_c  (or_btn_c),
         .o_btn_sr (or_btn_sr),
+        .o_btn_dht(or_btn_dht),
 
         .pc_ctrl_mode(pc_ctrl_mode),
         .pc_mode_sw  (pc_mode_sw),
 
-        .clock_time24(w_clock_time)
+        .clock_time24(w_clock_time),
+        .dht11_temp_data(w_dht11_temp),
+        .dht_ht_data(w_dht11_hum)
     );
 
     clk_datapath U_CLOCK_DATAPATH (
@@ -162,9 +194,6 @@ module top_stopwatch_watch (
         .i_btn(btn_5),
         .o_btn(i_btn_5)
     );
-
-    wire o_btn_8;
-    wire o_btn_2;
 
     control_unit U_CONTROL_UNIT (
         .clk    (clk),
@@ -212,32 +241,22 @@ module top_stopwatch_watch (
         .fnd_data     (fnd_data)
     );
 
-    wire [15:0] w_dht11_temp, w_dht11_hum;
-    wire w_dht11_done, w_dht11_valid;
-
-    wire [3:0] w_dht11_temp_1i = w_dht11_temp[15:8] % 10;
-    wire [3:0] w_dht11_temp_10i = w_dht11_temp[15:8] / 10;
-    // wire [3:0] w_dht11_temp_d = w_dht11_temp % 10;
-    wire [3:0] w_dht11_hum_1i  = w_dht11_hum[15:8]  % 10;
-    wire [3:0] w_dht11_hum_10i  = w_dht11_hum[15:8]  / 10;
-    // wire [3:0] w_dht11_hum_d  = w_dht11_hum  % 10;
-
-    wire [25:0] w_fnd_dht11_temp = {10'd0, 4'd12, w_dht11_temp_10i, w_dht11_temp_1i, 4'd0};
-    wire [25:0] w_fnd_dht11_hum  = {10'd0, 4'd13, w_dht11_hum_10i, w_dht11_hum_1i, 4'd0};
-    
-    wire [25:0] fnd_dht11_data = (mode_sw_com[2] ? w_fnd_dht11_hum : w_fnd_dht11_temp);
-
-    assign dht11_valid = w_dht11_valid;
-
     dht11_top U_DHT11_UNIT (
-    .clk(clk),
-    .reset(reset),
-    .dht11_btn_start(dht11_btn_start),
-    .dht11_ht_data(w_dht11_hum),
-    .dht11_temp_data(w_dht11_temp),
-    .dht11_valid(w_dht11_valid),
-    .dht11_done(w_dht11_done),
-    .dhtio(dhtio)
+        .clk(clk),
+        .reset(reset),
+        .dht11_btn_start(w_dht11_btn),
+        .dht11_ht_data(w_dht11_hum),
+        .dht11_temp_data(w_dht11_temp),
+        .dht11_valid(w_dht11_valid),
+        .dht11_done(w_dht11_done),
+        .dhtio(dhtio)
+    );
+
+    btn_debounce U_DHT11_BTN (
+        .clk  (clk),
+        .reset(reset),
+        .i_btn(dht11_btn_start),
+        .o_btn(w_dht11_out)
     );
 
 endmodule

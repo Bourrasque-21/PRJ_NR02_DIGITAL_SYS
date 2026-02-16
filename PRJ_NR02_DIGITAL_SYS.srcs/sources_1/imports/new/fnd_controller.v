@@ -39,7 +39,7 @@ module fnd_contr (
     wire       clk_1khz;
     wire [2:0] digit_sel;
 
-    mux_8x1 U_MUX_SR_DTH (
+    mux_8x1 U_MUX_SR_DHT (
         .sel           (digit_sel),
         .digit_1       (bcd_0),
         .digit_10      (bcd_1),
@@ -265,10 +265,11 @@ module bcd (
             4'd7:  fnd_data = 8'hf8;
             4'd8:  fnd_data = 8'h80;
             4'd9:  fnd_data = 8'h90;
-            4'd10: fnd_data = 8'h92;
-            4'd11: fnd_data = 8'hAf;
-
-            4'd14: fnd_data = 8'h7f;
+            4'd10: fnd_data = 8'h92; // S
+            4'd11: fnd_data = 8'haf; // r
+            4'd12: fnd_data = 8'h87; // t
+            4'd13: fnd_data = 8'h8b; // h
+            4'd14: fnd_data = 8'h7f; // dot
             default: fnd_data = 8'hff;
         endcase
     end

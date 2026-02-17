@@ -1,20 +1,20 @@
 `timescale 1ns / 1ps
 
 module fnd_contr (
-    input  wire        clk,
-    input  wire        reset,
+    input       clk,
+    input       reset,
 
-    input  wire        sel_display,
-    input  wire  [1:0] sel_display_2,
+    input       sel_display,
+    input [1:0] sel_display_2,
 
-    input  wire [25:0] fnd_in_data,
-    input  wire [23:0] fnd_in_data_2,
+    input [25:0] fnd_in_data,
+    input [23:0] fnd_in_data_2,
 
-    input wire  [25:0] fnd_dist_data,
-    input wire  [25:0] fnd_dht_data,
+    input [25:0] fnd_dist_data,
+    input [25:0] fnd_dht_data,
 
-    output wire [3:0]  fnd_digit,
-    output wire [7:0]  fnd_data
+    output [3:0]  fnd_digit,
+    output [7:0]  fnd_data
 );
 
     wire        clk_1khz;
@@ -156,18 +156,18 @@ module fnd_contr (
 endmodule
 
 module mux_2x1 (
-    input  wire       sel,
-    input  wire [3:0] i_sel0,
-    input  wire [3:0] i_sel1,
-    output wire [3:0] o_mux
+    input        sel,
+    input  [3:0] i_sel0,
+    input  [3:0] i_sel1,
+    output [3:0] o_mux
 );
     assign o_mux = sel ? i_sel1 : i_sel0;
 endmodule
 
 module clk_div (
-    input  wire clk,
-    input  wire reset,
-    output reg  clk_1khz
+    input      clk,
+    input      reset,
+    output reg clk_1khz
 );
     reg [$clog2(100_000):0] counter_r;
 
@@ -186,9 +186,9 @@ module clk_div (
 endmodule
 
 module counter8 (
-    input  wire       clk,
-    input  wire       reset,
-    output wire [2:0] digit_sel
+    input        clk,
+    input        reset,
+    output [2:0] digit_sel
 );
     reg [2:0] counter_r;
 
@@ -201,8 +201,8 @@ module counter8 (
 endmodule
 
 module decoder2x4 (
-    input  wire [1:0] dec_in,
-    output reg  [3:0] dec_out
+    input      [1:0] dec_in,
+    output reg [3:0] dec_out
 );
     always @(*) begin
         case (dec_in)
@@ -245,17 +245,17 @@ endmodule
 module digit_splitter #(
     parameter BIT_WIDTH = 7
 ) (
-    input  wire [BIT_WIDTH-1:0] in_data,
-    output wire [3:0]           digit_1,
-    output wire [3:0]           digit_10
+    input  [BIT_WIDTH-1:0] in_data,
+    output [3:0]           digit_1,
+    output [3:0]           digit_10
 );
     assign digit_1  = in_data % 10;
     assign digit_10 = (in_data / 10) % 10;
 endmodule
 
 module bcd (
-    input  wire [3:0] bcd,
-    output reg  [7:0] fnd_data
+    input      [3:0] bcd,
+    output reg [7:0] fnd_data
 );
     always @(*) begin
         case (bcd)
@@ -280,19 +280,19 @@ module bcd (
 endmodule
 
 module dot_onoff_comp (
-    input  wire [6:0] msec,
-    output wire       dot_onoff
+    input  [6:0] msec,
+    output       dot_onoff
 );
     assign dot_onoff = (msec < 50);
 endmodule
 
 module mux_4x1_set (
-    input  wire  [1:0] sel,
-    input  wire [25:0] i_sel0,
-    input  wire [25:0] i_sel1,
-    input  wire [25:0] i_sel2,
-    input  wire [25:0] i_sel3,
-    output wire [25:0] o_mux
+    input   [1:0] sel,
+    input  [25:0] i_sel0,
+    input  [25:0] i_sel1,
+    input  [25:0] i_sel2,
+    input  [25:0] i_sel3,
+    output [25:0] o_mux
 );
     assign o_mux = (sel == 2'b00) ? i_sel0 :
                    (sel == 2'b01) ? i_sel1 :

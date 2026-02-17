@@ -1,22 +1,22 @@
 `timescale 1ns / 1ps
 
 module uart_top (
-    input  wire clk,
-    input  wire reset,
-    input  wire uart_rx,
-    output wire uart_tx,
+    input  clk,
+    input  reset,
+    input  uart_rx,
+    output uart_tx,
 
-    output wire       o_btn_r,
-    output wire       o_btn_n,
-    output wire       o_btn_c,
-    output wire       o_btn_sr,
-    output wire       o_btn_dht,
+    output            o_btn_r,
+    output            o_btn_n,
+    output            o_btn_c,
+    output            o_btn_sr,
+    output            o_btn_dht,
     output reg        pc_ctrl_mode,
     output reg  [4:0] pc_mode_sw,
 
-    input wire [23:0] clock_time24,
-    input wire [15:0] dht11_temp_data,
-    input wire [15:0] dht_ht_data
+    input [23:0] clock_time24,
+    input [15:0] dht11_temp_data,
+    input [15:0] dht_ht_data
 );
 
     wire       b_tick;
@@ -129,12 +129,12 @@ endmodule
 
 
 module uart_rx (
-    input  wire       clk,
-    input  wire       reset,
-    input  wire       rx,
-    input  wire       b_tick,
-    output wire [7:0] rx_data,
-    output wire       rx_done
+    input        clk,
+    input        reset,
+    input        rx,
+    input        b_tick,
+    output [7:0] rx_data,
+    output       rx_done
 );
     localparam IDLE = 2'd0;
     localparam START = 2'd1;
@@ -234,14 +234,14 @@ endmodule
 
 
 module uart_tx (
-    input  wire       clk,
-    input  wire       reset,
-    input  wire       tx_start,
-    input  wire       b_tick,
-    input  wire [7:0] tx_data,
-    output wire       tx_busy,
-    output wire       tx_done,
-    output wire       uart_tx
+    input        clk,
+    input        reset,
+    input        tx_start,
+    input        b_tick,
+    input  [7:0] tx_data,
+    output       tx_busy,
+    output       tx_done,
+    output       uart_tx
 );
     localparam IDLE = 2'd0;
     localparam START = 2'd1;
@@ -356,8 +356,8 @@ module uart_tx (
 endmodule
 
 module baud_tick (
-    input  wire clk,
-    input  wire reset,
+    input       clk,
+    input       reset,
     output reg  b_tick
 );
     parameter BAUDRATE = 9600 * 16;
@@ -387,10 +387,10 @@ endmodule
 // ASCII Decoder
 //=============================================================
 module ascii_decoder (
-    input  wire       clk,
-    input  wire       reset,
-    input  wire [7:0] rx_data,
-    input  wire       rx_done,
+    input             clk,
+    input             reset,
+    input       [7:0] rx_data,
+    input             rx_done,
     output reg        in_btn_r,
     output reg        in_btn_n,
     output reg        in_btn_c,
@@ -430,23 +430,23 @@ endmodule
 // ASCII Sender
 //=============================================================
 module uart_time_sender (
-    input wire clk,
-    input wire reset,
-    input wire start,
-    input wire tx_done,
+    input            clk,
+    input            reset,
+    input            start,
+    input            tx_done,
 
     output reg       tx_start,
     output reg [7:0] tx_data,
 
-    input wire [4:0] hour,
-    input wire [5:0] min,
-    input wire [5:0] sec,
-    input wire [6:0] cc,
+    input      [4:0] hour,
+    input      [5:0] min,
+    input      [5:0] sec,
+    input      [6:0] cc,
 
-    input wire [7:0] temp_int,
-    // input wire [7:0] temp_dec,
-    input wire [7:0] ht_int
-    // input wire [7:0] ht_dec
+    input      [7:0] temp_int,
+    // input      [7:0] temp_dec,
+    input      [7:0] ht_int
+    // input      [7:0] ht_dec
 );
 
     wire [3:0] h1 = hour % 10;

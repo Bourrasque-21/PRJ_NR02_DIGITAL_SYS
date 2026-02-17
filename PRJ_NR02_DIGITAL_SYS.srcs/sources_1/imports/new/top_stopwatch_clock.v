@@ -7,30 +7,30 @@
 //   (stopwatch + clock + SR04 + DHT11 + UART PC control)
 //=============================================================
 module top_stopwatch_watch (
-    input wire clk,
-    input wire reset,
+    input        clk,
+    input        reset,
 
-    input wire [4:0] mode_sw,
-    input wire       btn_8,
-    input wire       btn_5,
-    input wire       btn_2,
-    input wire       sr04_start,
-    input wire       dht11_btn_start,
+    input  [4:0] mode_sw,
+    input        btn_8,
+    input        btn_5,
+    input        btn_2,
+    input        sr04_start,
+    input        dht11_btn_start,
 
-    input  wire echo,
-    output wire trig,
+    input        echo,
+    output       trig,
 
-    input  wire uart_rx,
-    output wire uart_tx,
+    input        uart_rx,
+    output       uart_tx,
 
-    output wire [3:0] fnd_digit,
-    output wire [7:0] fnd_data,
+    output [3:0] fnd_digit,
+    output [7:0] fnd_data,
 
-    output wire [3:0] out_led,
-    output wire       pc_mode_led,
-    output wire       dht11_valid,
+    output [3:0] out_led,
+    output       pc_mode_led,
+    output       dht11_valid,
 
-    inout dhtio
+    inout        dhtio
 );
 
 //=============================================================
@@ -278,16 +278,16 @@ endmodule
 // Stopwatch_datapath
 //=============================================================
 module stopwatch_datapath (
-    input wire clk,
-    input wire reset,
-    input wire mode_sw,
-    input wire clear,
-    input wire run_stop,
+    input        clk,
+    input        reset,
+    input        mode_sw,
+    input        clear,
+    input        run_stop,
 
-    output wire [6:0] msec,
-    output wire [5:0] sec,
-    output wire [5:0] min,
-    output wire [6:0] hour
+    output [6:0] msec,
+    output [5:0] sec,
+    output [5:0] min,
+    output [6:0] hour
 );
 
     wire w_tick_100hz;
@@ -365,14 +365,14 @@ module tick_counter #(
     parameter BIT_WIDTH = 7,
     parameter TIMES     = 100
 ) (
-    input wire clk,
-    input wire reset,
-    input wire i_tick,
-    input wire mode,
-    input wire clear,
-    input wire run_stop,
+    input clk,
+    input reset,
+    input i_tick,
+    input mode,
+    input clear,
+    input run_stop,
 
-    output wire [BIT_WIDTH-1:0] o_count,
+    output      [BIT_WIDTH-1:0] o_count,
     output reg                  o_tick
 );
     reg [BIT_WIDTH-1:0] counter_reg, counter_next;
@@ -418,9 +418,9 @@ endmodule
 // Tick_generator_100hz
 //=============================================================
 module tick_gen_100hz (
-    input  wire clk,
-    input  wire reset,
-    input  wire i_run_stop,
+    input       clk,
+    input       reset,
+    input       i_run_stop,
     output reg  o_tick_100hz
 );
     parameter F_COUNT = 100_000_000 / 100;
@@ -451,19 +451,19 @@ endmodule
 // Clock_datapath
 //=============================================================
 module clk_datapath (
-    input wire clk,
-    input wire reset,
+    input clk,
+    input reset,
 
-    input wire sw_time_set,
-    input wire btn_next,
-    input wire up_count,
-    input wire down_count,
-    input wire clock_mode,
+    input sw_time_set,
+    input btn_next,
+    input up_count,
+    input down_count,
+    input clock_mode,
 
-    output wire [6:0] c_msec,
-    output wire [5:0] c_sec,
-    output wire [5:0] c_min,
-    output wire [4:0] c_hour,
+    output      [6:0] c_msec,
+    output      [5:0] c_sec,
+    output      [5:0] c_min,
+    output      [4:0] c_hour,
     output reg  [3:0] led
 );
     wire tick_100hz;
@@ -584,10 +584,10 @@ endmodule
 // Select_unit
 //=============================================================
 module select_unit (
-    input  wire       clk,
-    input  wire       reset,
-    input  wire       en,
-    input  wire       btn_next,
+    input             clk,
+    input             reset,
+    input             en,
+    input             btn_next,
     output reg  [1:0] sel
 );
     always @(posedge clk or posedge reset) begin
@@ -607,18 +607,18 @@ module set_counter #(
     parameter WIDTH = 7,
     parameter MAX   = 100
 ) (
-    input wire clk,
-    input wire reset,
+    input clk,
+    input reset,
 
-    input  wire             en_tick,
-    input  wire             i_tick,
-    output reg              o_tick,
-    output wire [WIDTH-1:0] count,
+    input en_tick,
+    input i_tick,
+    output reg o_tick,
+    output [WIDTH-1:0] count,
 
-    input wire set_en,
-    input wire sel_me,
-    input wire up,
-    input wire down
+    input set_en,
+    input sel_me,
+    input up,
+    input down
 );
 
     reg [WIDTH-1:0] counter_reg, counter_next;

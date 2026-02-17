@@ -1,10 +1,10 @@
 `timescale 1ns / 1ps
 
 module btn_debounce (
-    input  wire clk,
-    input  wire reset,
-    input  wire i_btn,
-    output wire o_btn
+    input  clk,
+    input  reset,
+    input  i_btn,
+    output o_btn
 );
 
     parameter CLK_DIV = 100_000;

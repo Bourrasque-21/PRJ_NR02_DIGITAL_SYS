@@ -211,6 +211,7 @@ module dht11_controller (
                 end
 
                 // Shift left, save bit in LSB
+                // HIGH duration >= 5 ticks (50us) -> store '1', else '0'
                 DATA_C: begin
                     if (clk_10us) begin
                         if (dhtio == 1) begin

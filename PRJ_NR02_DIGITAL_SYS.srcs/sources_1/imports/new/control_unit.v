@@ -1,24 +1,24 @@
 `timescale 1ns / 1ps
 
 module control_unit (
-    input  wire       clk,
-    input  wire       reset,
+    input       clk,
+    input       reset,
 
-    input  wire [2:0] mode_sw,
-    input  wire       i_run_stop,
-    input  wire       i_clear,
-    input  wire       cu_btn_5,
+    input [2:0] mode_sw,
+    input       i_run_stop,
+    input       i_clear,
+    input       cu_btn_5,
 
-    output wire       o_mode_sw,
-    output reg        o_run_stop,
-    output reg        o_clear,
+    output      o_mode_sw,
+    output reg  o_run_stop,
+    output reg  o_clear,
 
-    output wire       clock_mode,
-    output wire       time_set_mode,
+    output      clock_mode,
+    output      time_set_mode,
 
-    output wire       clk_next,
-    output wire       clk_up,
-    output wire       clk_down
+    output      clk_next,
+    output      clk_up,
+    output      clk_down
 );
 
     assign o_mode_sw  = mode_sw[0]; // Stopwatch mode UP/DOWN

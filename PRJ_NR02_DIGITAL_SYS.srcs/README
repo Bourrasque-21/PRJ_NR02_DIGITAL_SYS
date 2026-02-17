@@ -1,0 +1,3 @@
+constrs_1/  : Basys3 pin constraint (.xdc) file  
+
+sources_1/  : Verilog RTL source files  

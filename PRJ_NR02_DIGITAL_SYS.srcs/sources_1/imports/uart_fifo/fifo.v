@@ -59,7 +59,6 @@ module register_file #(
 
     always @(posedge clk) begin
         if (we) begin
-
             register_file[w_addr] <= push_data;
         end
     end
@@ -107,9 +106,7 @@ module f_control_unit #(
         rptr_next = rptr_reg;
         full_next = full_reg;
         empty_next = empty_reg;
-        case ({
-            push, pop
-        })
+        case ({push, pop})
 
             2'b10: begin
                 if (!full) begin

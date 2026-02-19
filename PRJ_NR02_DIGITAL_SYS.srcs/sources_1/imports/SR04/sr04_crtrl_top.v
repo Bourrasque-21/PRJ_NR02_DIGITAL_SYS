@@ -49,7 +49,7 @@ module sr04_ctrl (
     //============================================================
     localparam IDLE_S = 3'd0, TRIG_S = 3'd1, WAIT_S = 3'd2, CALC_S = 3'd3, CALC_S2 = 3'd4;
 
-    parameter TIMEOUT_WAIT = 30000; // (30ms) maximum waiting time for echo_rise
+    parameter TIMEOUT_WAIT = 25000; // (25ms) maximum waiting time for echo_rise
     parameter TIMEOUT_CALC = 25000; // (25ms) maximum time allowed while measuring echo high width
 
     reg [ 2:0] c_state;

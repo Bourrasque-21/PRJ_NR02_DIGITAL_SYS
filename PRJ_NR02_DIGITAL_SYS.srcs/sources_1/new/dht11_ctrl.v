@@ -92,7 +92,7 @@ module dht11_controller (
             dht11_valid <= 1'b0;
             dht11_done <= 1'b0;
             timeout_rst_reg <= 1'b0;
-            auto_cnt_reg <= 23'd6_000_000 - 1;
+            auto_cnt_reg <= 23'd6_000_000 - 500_000 - 1; // Auto start after 5s
         end else begin
             c_state <= n_state;
             dhtio_reg <= dhtio_next;
@@ -113,8 +113,8 @@ module dht11_controller (
                 if (check_valid == data_check_sum) begin
                     dht11_valid <= 1'b1;
                     dht11_done <= 1'b1;
-                    ht   <= {data_ht_int, data_ht_dec};
-                    temp <= {data_temp_int, data_temp_dec};
+                    ht   <= {data_ht_int, data_ht_dec};     // humidity output data
+                    temp <= {data_temp_int, data_temp_dec}; // temperature output data
                 end else begin
                     dht11_valid <= 1'b0;
                 end

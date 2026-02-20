@@ -64,6 +64,11 @@ module dht11_controller (
     reg [16:0] timeout_rst_reg, timeout_rst_next; // Watchdog timer
     reg [22:0] auto_cnt_reg, auto_cnt_next;       // for auto start count
 
+    // Synchronizer, edge detector
+    reg dhtio_meta_reg, dhtio_sync_reg, dhtio_sync_2_reg;
+    wire dhtio_rise = dhtio_sync_reg & ~dhtio_sync_2_reg;
+    wire dhtio_fall = ~dhtio_sync_reg & dhtio_sync_2_reg;
+
     wire [7:0] data_ht_int    = data_reg[39:32]; // humidity i
     wire [7:0] data_ht_dec    = data_reg[31:24]; // humidity d
     wire [7:0] data_temp_int  = data_reg[23:16]; // temperature i
@@ -84,6 +89,9 @@ module dht11_controller (
             c_state <= 3'b0;
             dhtio_reg <= 1'b1;
             io_sel_reg <= 1'b1;
+            dhtio_meta_reg <= 1'b1;
+            dhtio_sync_reg <= 1'b1;
+            dhtio_sync_2_reg <= 1'b1;
             data_reg <= 40'b0;
             data_cnt_reg <= 6'b0;
             tick_cnt_reg <= 11'b0;
@@ -92,8 +100,13 @@ module dht11_controller (
             dht11_valid <= 1'b0;
             dht11_done <= 1'b0;
             timeout_rst_reg <= 1'b0;
-            auto_cnt_reg <= 23'd6_000_000 - 500_000 - 1; // Auto start after 5s
+            auto_cnt_reg <= 23'd6_000_000 - 10_000 - 1; // Auto start after 0.1s
         end else begin
+            // 2FF synchronizer, edge detection
+            dhtio_meta_reg <= dhtio;
+            dhtio_sync_reg <= dhtio_meta_reg;
+            dhtio_sync_2_reg <= dhtio_sync_reg;
+
             c_state <= n_state;
             dhtio_reg <= dhtio_next;
             io_sel_reg <= io_sel_next;
@@ -188,47 +201,40 @@ module dht11_controller (
                     end
                 end
                 SYNC_L: begin
-                    if (clk_10us) begin
-                        if (dhtio == 1) begin
-                            n_state = SYNC_H;
-                        end
+                    if (dhtio_rise) begin
+                        n_state = SYNC_H;
                     end
                 end
                 SYNC_H: begin
-                    if (clk_10us) begin
-                        if (dhtio == 0) begin
-                            n_state = DATA_SYNC;
-                        end
+                    if (dhtio_fall) begin
+                        n_state = DATA_SYNC;
                     end
                 end
                 DATA_SYNC: begin
-                    if (clk_10us) begin
-                        if (dhtio == 1) begin
-                            tick_cnt_next = 0;
-                            n_state = DATA_C;
-                        end
+                    if (dhtio_rise) begin
+                        tick_cnt_next = 0;
+                        n_state = DATA_C;
                     end
                 end
 
-                // Shift left, save bit in LSB
-                // HIGH duration >= 5 ticks (50us) -> store '1', else '0'
+                // Shift left, save bit in LSB.
+                // HIGH duration >= 5 ticks (50us) -> store '1', else '0'.
                 DATA_C: begin
-                    if (clk_10us) begin
-                        if (dhtio == 1) begin
-                            tick_cnt_next = tick_cnt_reg + 1;
+                    if (clk_10us && dhtio_sync_reg) begin
+                        tick_cnt_next = tick_cnt_reg + 1;
+                    end
+                    if (dhtio_fall) begin
+                        if (tick_cnt_reg >= 5) begin
+                            data_next = {data_reg[38:0], 1'b1};
                         end else begin
-                            if (tick_cnt_reg >= 5) begin
-                                data_next = {data_reg[38:0], 1'b1};
-                            end else begin
-                                data_next = {data_reg[38:0], 1'b0};
-                            end
-                            if (data_cnt_reg == 39) begin
-                                tick_cnt_next = 0;
-                                n_state = STOP;
-                            end else begin
-                                data_cnt_next = data_cnt_reg + 1;
-                                n_state = DATA_SYNC;
-                            end
+                            data_next = {data_reg[38:0], 1'b0};
+                        end
+                        if (data_cnt_reg == 39) begin
+                            tick_cnt_next = 0;
+                            n_state = STOP;
+                        end else begin
+                            data_cnt_next = data_cnt_reg + 1;
+                            n_state = DATA_SYNC;
                         end
                     end
                 end

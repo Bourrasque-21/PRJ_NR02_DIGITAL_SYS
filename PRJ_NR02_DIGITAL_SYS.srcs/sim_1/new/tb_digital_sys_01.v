@@ -81,6 +81,28 @@ task dht11_ctrl();
     end
 endtask
 
+task dht11_ctrl_error();
+    integer k;
+    begin
+        sensor_io_sel   = 1'b0;
+        // response 80us low / 80us high
+        dht11_sensor_io = 1'b0; #80_000;
+        dht11_sensor_io = 1'b1; #80_000;
+
+        for (k = 3; k >= 0; k = k - 1) begin
+            dht11_sensor_io = 1'b0; #60_000;  
+            dht11_sensor_io = 1'b1;
+            if (dht11_sensor_data[k] == 0) #30_000; 
+            else                           #80_000; 
+        end
+        // dht11_sensor_io = 1'b0; 
+        // #50_000;   
+        // // release
+        // sensor_io_sel   = 1'b1;
+        // dht11_sensor_io = 1'b1;
+    end
+endtask
+
     //UART PC input control
     task uart_sender();
         begin
@@ -335,10 +357,36 @@ endtask
         uart_sender();
 
 
-
-
-
-
+        #(BAUD_PERIOD);
+        #(BAUD_PERIOD);
+        #10_000_000;
+        #(BAUD_PERIOD);
+        #(BAUD_PERIOD);
+        #10_000_000;
+        #(BAUD_PERIOD);
+        #(BAUD_PERIOD);
+        #10_000_000;
+        #(BAUD_PERIOD);
+        #(BAUD_PERIOD);
+        #10_000_000;
+        #(BAUD_PERIOD);
+        #(BAUD_PERIOD);
+        #10_000_000;
+        #(BAUD_PERIOD);
+        #(BAUD_PERIOD);
+        #10_000_000;
+        #(BAUD_PERIOD);
+        #(BAUD_PERIOD);
+        #10_000_000;
+        #(BAUD_PERIOD);
+        #(BAUD_PERIOD);
+        mode_sw = 5'b10010;
+        #10_000_000;
+        
+        press_btn_dht11();
+        #(BAUD_PERIOD);
+        #(BAUD_PERIOD);
+        dht11_ctrl_error();
 
         $stop;
     end

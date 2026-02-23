@@ -108,7 +108,7 @@ Q : Request Current Time & DHT11 Sensor Data
   FSM을 강제로 초기 상태로 복귀시키기 위 Watchdog Timer 사용  
 
 - Metastability Mitigation  
-  SR04 echo 비동기 신호 동기화(Synchronizer)  
+  SR04 echo, DHT11 dhtio 비동기 신호 동기화(Synchronizer)  
   Edge detection 구조 설계  
   
 - Input Priority Control  

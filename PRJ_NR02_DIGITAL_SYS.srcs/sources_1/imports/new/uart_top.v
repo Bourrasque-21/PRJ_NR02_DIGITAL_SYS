@@ -6,13 +6,13 @@ module uart_top (
     input  uart_rx,
     output uart_tx,
 
-    output            o_btn_r,
-    output            o_btn_n,
-    output            o_btn_c,
-    output            o_btn_sr,
-    output            o_btn_dht,
-    output reg        pc_ctrl_mode,
-    output reg  [4:0] pc_mode_sw,
+    output           o_btn_r,
+    output           o_btn_n,
+    output           o_btn_c,
+    output           o_btn_sr,
+    output           o_btn_dht,
+    output reg       pc_ctrl_mode,
+    output reg [4:0] pc_mode_sw,
 
     input [23:0] clock_time24,
     input [15:0] dht11_temp_data,
@@ -23,6 +23,19 @@ module uart_top (
     wire       rx_done;
     wire [7:0] rx_data;
 
+    // RX FIFO Signals
+    wire [7:0] w_rx_fifo_pop_data;
+    wire       w_rx_fifo_full;
+    wire       w_rx_fifo_empty;
+    wire       w_rx_pop;
+
+    wire       w_rx_push = rx_done & (~w_rx_fifo_full);
+    assign w_rx_pop   = ~w_rx_fifo_empty;
+
+    wire       rx_evt = w_rx_pop;
+    wire [7:0] rx_byte = w_rx_fifo_pop_data;
+
+    // TX FIFO Signals
     wire [7:0] w_tx_fifo_pop_data;
     wire       w_tx_fifo_full;
     wire       w_tx_fifo_empty;
@@ -35,7 +48,7 @@ module uart_top (
     wire       w_tx_start = (~w_tx_busy) & (~w_tx_fifo_empty);
     wire       w_tx_push = w_time_tx_start & (~w_tx_fifo_full);
 
-    wire       q = rx_done && (rx_data == 8'h51); // 'Q'
+    wire       q = rx_evt && (rx_byte == 8'h51);  // 'Q'
 
     wire [4:0] hour = clock_time24[23:19];
     wire [5:0] min = clock_time24[18:13];
@@ -75,6 +88,17 @@ module uart_top (
         .rx_done(rx_done)
     );
 
+    fifo U_FIFO_RX (
+        .clk      (clk),
+        .rst      (reset),
+        .push     (w_rx_push),
+        .pop      (w_rx_pop),
+        .push_data(rx_data),
+        .pop_data (w_rx_fifo_pop_data),
+        .full     (w_rx_fifo_full),
+        .empty    (w_rx_fifo_empty)
+    );
+
     baud_tick U_BAUD_TICK (
         .clk   (clk),
         .reset (reset),
@@ -84,8 +108,8 @@ module uart_top (
     ascii_decoder U_ASCII_DECODER (
         .clk       (clk),
         .reset     (reset),
-        .rx_data   (rx_data),
-        .rx_done   (rx_done),
+        .rx_data   (rx_byte),
+        .rx_done   (rx_evt),
         .in_btn_r  (o_btn_r),
         .in_btn_n  (o_btn_n),
         .in_btn_c  (o_btn_c),
@@ -113,14 +137,14 @@ module uart_top (
         if (reset) begin
             pc_ctrl_mode <= 1'b0;
             pc_mode_sw   <= 5'b00000;
-        end else if (rx_done) begin
-            case (rx_data)
-                8'h4D:   pc_ctrl_mode <= ~pc_ctrl_mode;   // 'M'  
-                8'h30:   pc_mode_sw[0] <= ~pc_mode_sw[0]; // '0'
-                8'h31:   pc_mode_sw[1] <= ~pc_mode_sw[1]; // '1'
-                8'h32:   pc_mode_sw[2] <= ~pc_mode_sw[2]; // '2'
-                8'h33:   pc_mode_sw[3] <= ~pc_mode_sw[3]; // '3'
-                8'h34:   pc_mode_sw[4] <= ~pc_mode_sw[4]; // '4'
+        end else if (rx_evt) begin
+            case (rx_byte)
+                8'h4D:   pc_ctrl_mode <= ~pc_ctrl_mode;  // 'M'  
+                8'h30:   pc_mode_sw[0] <= ~pc_mode_sw[0];  // '0'
+                8'h31:   pc_mode_sw[1] <= ~pc_mode_sw[1];  // '1'
+                8'h32:   pc_mode_sw[2] <= ~pc_mode_sw[2];  // '2'
+                8'h33:   pc_mode_sw[3] <= ~pc_mode_sw[3];  // '3'
+                8'h34:   pc_mode_sw[4] <= ~pc_mode_sw[4];  // '4'
                 default: ;
             endcase
         end
@@ -356,9 +380,9 @@ module uart_tx (
 endmodule
 
 module baud_tick (
-    input       clk,
-    input       reset,
-    output reg  b_tick
+    input      clk,
+    input      reset,
+    output reg b_tick
 );
     parameter BAUDRATE = 9600 * 16;
     parameter F_COUNT = 100_000_000 / BAUDRATE;
@@ -387,15 +411,15 @@ endmodule
 // ASCII Decoder
 //=============================================================
 module ascii_decoder (
-    input             clk,
-    input             reset,
-    input       [7:0] rx_data,
-    input             rx_done,
-    output reg        in_btn_r,
-    output reg        in_btn_n,
-    output reg        in_btn_c,
-    output reg        in_btn_sr,
-    output reg        in_btn_dht
+    input            clk,
+    input            reset,
+    input      [7:0] rx_data,
+    input            rx_done,
+    output reg       in_btn_r,
+    output reg       in_btn_n,
+    output reg       in_btn_c,
+    output reg       in_btn_sr,
+    output reg       in_btn_dht
 );
     always @(posedge clk or posedge reset) begin
         if (reset) begin
@@ -430,22 +454,22 @@ endmodule
 // ASCII Sender
 //=============================================================
 module uart_time_sender (
-    input            clk,
-    input            reset,
-    input            start,
-    input            tx_done,
+    input clk,
+    input reset,
+    input start,
+    input tx_done,
 
     output reg       tx_start,
     output reg [7:0] tx_data,
 
-    input      [4:0] hour,
-    input      [5:0] min,
-    input      [5:0] sec,
-    input      [6:0] cc,
+    input [4:0] hour,
+    input [5:0] min,
+    input [5:0] sec,
+    input [6:0] cc,
 
-    input      [7:0] temp_int,
+    input [7:0] temp_int,
     // input      [7:0] temp_dec,
-    input      [7:0] ht_int
+    input [7:0] ht_int
     // input      [7:0] ht_dec
 );
 
@@ -464,41 +488,41 @@ module uart_time_sender (
     wire [3:0] ht10 = ht_int / 10;
 
     reg [7:0] msg[0:30];
-    
+
     always @(*) begin
-        msg[0]  = 8'h30 + h10; // H
+        msg[0]  = 8'h30 + h10;  // H
         msg[1]  = 8'h30 + h1;  // H
-        msg[2]  = 8'h3A;       // :
-        msg[3]  = 8'h30 + m10; // M  
+        msg[2]  = 8'h3A;  // :
+        msg[3]  = 8'h30 + m10;  // M  
         msg[4]  = 8'h30 + m1;  // M
-        msg[5]  = 8'h3A;       // :
-        msg[6]  = 8'h30 + s10; // S 
+        msg[5]  = 8'h3A;  // :
+        msg[6]  = 8'h30 + s10;  // S 
         msg[7]  = 8'h30 + s1;  // S 
-        msg[8]  = 8'h3A;       // :
-        msg[9]  = 8'h30 + c10; // C 
+        msg[8]  = 8'h3A;  // :
+        msg[9]  = 8'h30 + c10;  // C 
         msg[10] = 8'h30 + c1;  // C 
-        msg[11] = 8'h0D;       // \r
-        msg[12] = 8'h0A;       // \n
+        msg[11] = 8'h0D;  // \r
+        msg[12] = 8'h0A;  // \n
 
-        msg[13] = 8'h54;          // T
-        msg[14] = 8'h20;          // 
-        msg[15] = 8'h30 + temp10; // X    
+        msg[13] = 8'h54;  // T
+        msg[14] = 8'h20;  // 
+        msg[15] = 8'h30 + temp10;  // X    
         msg[16] = 8'h30 + temp1;  // X    
-        msg[17] = 8'h2E;          // .
-        msg[18] = 8'h30;          // X
-        msg[19] = 8'h43;          // C
-        msg[20] = 8'h0D;          // \r
-        msg[21] = 8'h0A;          // \n 
+        msg[17] = 8'h2E;  // .
+        msg[18] = 8'h30;  // X
+        msg[19] = 8'h43;  // C
+        msg[20] = 8'h0D;  // \r
+        msg[21] = 8'h0A;  // \n 
 
-        msg[22] = 8'h48;          // H
-        msg[23] = 8'h20;          // 
-        msg[24] = 8'h30 + ht10;   // X    
-        msg[25] = 8'h30 + ht1;    // X    
-        msg[26] = 8'h2E;          // .
-        msg[27] = 8'h30;          // X
-        msg[28] = 8'h25;          // %
-        msg[29] = 8'h0D;          // \r
-        msg[30] = 8'h0A;          // \n 
+        msg[22] = 8'h48;  // H
+        msg[23] = 8'h20;  // 
+        msg[24] = 8'h30 + ht10;  // X    
+        msg[25] = 8'h30 + ht1;  // X    
+        msg[26] = 8'h2E;  // .
+        msg[27] = 8'h30;  // X
+        msg[28] = 8'h25;  // %
+        msg[29] = 8'h0D;  // \r
+        msg[30] = 8'h0A;  // \n 
     end
 
     localparam S_IDLE = 2'd0;
